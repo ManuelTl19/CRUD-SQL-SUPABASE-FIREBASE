@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const shippersModel = require("../modelos/shippers.model");
+const { sendDbError } = require("./_dbErrors");
 
 // Obtener todos
 exports.getAll = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAll = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM shippers");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -22,36 +24,40 @@ exports.getById = async (req, res) => {
     }
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // Crear
 exports.create = async (req, res) => {
   try {
+    const payload = shippersModel.createData(req.body);
     const [result] = await db.query(
       "INSERT INTO shippers SET ?",
-      req.body
+      payload
     );
     res.status(201).json({ message: "Shipper creado", id: result.insertId });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar el transportista porque tiene pedidos asociados",
+    });
   }
 };
 
 // Actualizar
 exports.update = async (req, res) => {
   try {
+    const payload = shippersModel.updateData(req.body);
     const [result] = await db.query(
       "UPDATE shippers SET ? WHERE ShipperID = ?",
-      [req.body, req.params.id]
+      [payload, req.params.id]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Shipper no encontrado" });
     }
     res.json({ message: "Shipper actualizado" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -67,6 +73,6 @@ exports.remove = async (req, res) => {
     }
     res.json({ message: "Shipper eliminado" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

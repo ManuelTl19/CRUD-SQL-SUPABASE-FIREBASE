@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const orderDetailsModel = require("../modelos/order_details.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllOrderDetails = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllOrderDetails = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM order_details");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -26,25 +28,23 @@ exports.getOrderDetailById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createOrderDetail = async (req, res) => {
   try {
-    const { OrderID, ProductID, UnitPrice, Quantity, Discount } = req.body;
+    const payload = orderDetailsModel.createData(req.body);
 
     const [result] = await db.query(
-      `INSERT INTO order_details 
-      (OrderID, ProductID, UnitPrice, Quantity, Discount)
-      VALUES (?, ?, ?, ?, ?)`,
-      [OrderID, ProductID, UnitPrice, Quantity, Discount]
+      "INSERT INTO order_details SET ?",
+      payload
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -52,15 +52,11 @@ exports.createOrderDetail = async (req, res) => {
 exports.updateOrderDetail = async (req, res) => {
   try {
     const { orderId, productId } = req.params;
-    const { UnitPrice, Quantity, Discount } = req.body;
+    const payload = orderDetailsModel.updateData(req.body);
 
     const [result] = await db.query(
-      `UPDATE order_details SET
-        UnitPrice = ?,
-        Quantity = ?,
-        Discount = ?
-      WHERE OrderID = ? AND ProductID = ?`,
-      [UnitPrice, Quantity, Discount, orderId, productId]
+      "UPDATE order_details SET ? WHERE OrderID = ? AND ProductID = ?",
+      [payload, orderId, productId]
     );
 
     if (result.affectedRows === 0) {
@@ -69,7 +65,7 @@ exports.updateOrderDetail = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -89,6 +85,6 @@ exports.deleteOrderDetail = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

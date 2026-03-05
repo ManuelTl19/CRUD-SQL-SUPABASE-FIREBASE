@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const suppliersModel = require("../modelos/suppliers.model");
+const { sendDbError } = require("./_dbErrors");
 
 // Obtener todos
 exports.getAll = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAll = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM suppliers");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -22,36 +24,40 @@ exports.getById = async (req, res) => {
     }
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // Crear
 exports.create = async (req, res) => {
   try {
+    const payload = suppliersModel.createData(req.body);
     const [result] = await db.query(
       "INSERT INTO suppliers SET ?",
-      req.body
+      payload
     );
     res.status(201).json({ message: "Proveedor creado", id: result.insertId });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar el proveedor porque tiene productos asociados",
+    });
   }
 };
 
 // Actualizar
 exports.update = async (req, res) => {
   try {
+    const payload = suppliersModel.updateData(req.body);
     const [result] = await db.query(
       "UPDATE suppliers SET ? WHERE SupplierID = ?",
-      [req.body, req.params.id]
+      [payload, req.params.id]
     );
     if (result.affectedRows === 0) {
       return res.status(404).json({ message: "Proveedor no encontrado" });
     }
     res.json({ message: "Proveedor actualizado" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -67,6 +73,6 @@ exports.remove = async (req, res) => {
     }
     res.json({ message: "Proveedor eliminado" });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

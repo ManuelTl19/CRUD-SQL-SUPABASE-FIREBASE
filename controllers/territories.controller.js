@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const territoriesModel = require("../modelos/territories.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllTerritories = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllTerritories = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM territories");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -24,34 +26,36 @@ exports.getTerritoryById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createTerritory = async (req, res) => {
   try {
-    const { TerritoryID, TerritoryDescription, RegionID } = req.body;
+    const payload = territoriesModel.createData(req.body);
 
     const [result] = await db.query(
-      "INSERT INTO territories (TerritoryID, TerritoryDescription, RegionID) VALUES (?, ?, ?)",
-      [TerritoryID, TerritoryDescription, RegionID]
+      "INSERT INTO territories SET ?",
+      payload
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar el territorio porque tiene empleados asociados",
+    });
   }
 };
 
 // UPDATE
 exports.updateTerritory = async (req, res) => {
   try {
-    const { TerritoryDescription, RegionID } = req.body;
+    const payload = territoriesModel.updateData(req.body);
 
     const [result] = await db.query(
-      "UPDATE territories SET TerritoryDescription = ?, RegionID = ? WHERE TerritoryID = ?",
-      [TerritoryDescription, RegionID, req.params.id]
+      "UPDATE territories SET ? WHERE TerritoryID = ?",
+      [payload, req.params.id]
     );
 
     if (result.affectedRows === 0) {
@@ -60,7 +64,7 @@ exports.updateTerritory = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -78,6 +82,6 @@ exports.deleteTerritory = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

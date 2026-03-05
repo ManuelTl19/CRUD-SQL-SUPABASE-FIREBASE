@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const employeesModel = require("../modelos/employees.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllEmployees = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllEmployees = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM employees");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -24,129 +26,36 @@ exports.getEmployeeById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createEmployee = async (req, res) => {
   try {
-    const {
-      LastName,
-      FirstName,
-      Title,
-      TitleOfCourtesy,
-      BirthDate,
-      HireDate,
-      Address,
-      City,
-      Region,
-      PostalCode,
-      Country,
-      HomePhone,
-      Extension,
-      Photo,
-      Notes,
-      ReportsTo,
-      PhotoPath
-    } = req.body;
+    const payload = employeesModel.createData(req.body);
 
     const [result] = await db.query(
-      `INSERT INTO employees 
-      (LastName, FirstName, Title, TitleOfCourtesy, BirthDate, HireDate,
-       Address, City, Region, PostalCode, Country, HomePhone,
-       Extension, Photo, Notes, ReportsTo, PhotoPath)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        LastName,
-        FirstName,
-        Title,
-        TitleOfCourtesy,
-        BirthDate,
-        HireDate,
-        Address,
-        City,
-        Region,
-        PostalCode,
-        Country,
-        HomePhone,
-        Extension,
-        Photo,
-        Notes,
-        ReportsTo,
-        PhotoPath
-      ]
+      "INSERT INTO employees SET ?",
+      payload
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar el empleado porque tiene pedidos, subordinados o territorios asociados",
+    });
   }
 };
 
 // UPDATE
 exports.updateEmployee = async (req, res) => {
   try {
-    const {
-      LastName,
-      FirstName,
-      Title,
-      TitleOfCourtesy,
-      BirthDate,
-      HireDate,
-      Address,
-      City,
-      Region,
-      PostalCode,
-      Country,
-      HomePhone,
-      Extension,
-      Photo,
-      Notes,
-      ReportsTo,
-      PhotoPath
-    } = req.body;
+    const payload = employeesModel.updateData(req.body);
 
     const [result] = await db.query(
-      `UPDATE employees SET
-        LastName = ?, 
-        FirstName = ?, 
-        Title = ?, 
-        TitleOfCourtesy = ?, 
-        BirthDate = ?, 
-        HireDate = ?, 
-        Address = ?, 
-        City = ?, 
-        Region = ?, 
-        PostalCode = ?, 
-        Country = ?, 
-        HomePhone = ?, 
-        Extension = ?, 
-        Photo = ?, 
-        Notes = ?, 
-        ReportsTo = ?, 
-        PhotoPath = ?
-      WHERE EmployeeID = ?`,
-      [
-        LastName,
-        FirstName,
-        Title,
-        TitleOfCourtesy,
-        BirthDate,
-        HireDate,
-        Address,
-        City,
-        Region,
-        PostalCode,
-        Country,
-        HomePhone,
-        Extension,
-        Photo,
-        Notes,
-        ReportsTo,
-        PhotoPath,
-        req.params.id
-      ]
+      "UPDATE employees SET ? WHERE EmployeeID = ?",
+      [payload, req.params.id]
     );
 
     if (result.affectedRows === 0) {
@@ -155,7 +64,7 @@ exports.updateEmployee = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -173,6 +82,8 @@ exports.deleteEmployee = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar el empleado porque tiene pedidos, subordinados o territorios asociados",
+    });
   }
 };

@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const customerCustomerDemoModel = require("../modelos/customerCustomerDemo.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllCustomerCustomerDemo = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllCustomerCustomerDemo = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM customercustomerdemo");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -26,23 +28,23 @@ exports.getCustomerCustomerDemoById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createCustomerCustomerDemo = async (req, res) => {
   try {
-    const { CustomerID, CustomerTypeID } = req.body;
+    const payload = customerCustomerDemoModel.createData(req.body);
 
     const [result] = await db.query(
       "INSERT INTO customercustomerdemo (CustomerID, CustomerTypeID) VALUES (?, ?)",
-      [CustomerID, CustomerTypeID]
+      [payload.CustomerID, payload.CustomerTypeID]
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -62,6 +64,6 @@ exports.deleteCustomerCustomerDemo = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

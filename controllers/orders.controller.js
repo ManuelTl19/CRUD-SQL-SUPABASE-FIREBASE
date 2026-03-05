@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const ordersModel = require("../modelos/orders.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllOrders = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllOrders = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM orders");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -24,109 +26,36 @@ exports.getOrderById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createOrder = async (req, res) => {
   try {
-    const {
-      CustomerID,
-      EmployeeID,
-      OrderDate,
-      RequiredDate,
-      ShippedDate,
-      ShipVia,
-      Freight,
-      ShipName,
-      ShipAddress,
-      ShipCity,
-      ShipRegion,
-      ShipPostalCode,
-      ShipCountry
-    } = req.body;
+    const payload = ordersModel.createData(req.body);
 
     const [result] = await db.query(
-      `INSERT INTO orders
-      (CustomerID, EmployeeID, OrderDate, RequiredDate, ShippedDate,
-       ShipVia, Freight, ShipName, ShipAddress, ShipCity,
-       ShipRegion, ShipPostalCode, ShipCountry)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        CustomerID,
-        EmployeeID,
-        OrderDate,
-        RequiredDate,
-        ShippedDate,
-        ShipVia,
-        Freight,
-        ShipName,
-        ShipAddress,
-        ShipCity,
-        ShipRegion,
-        ShipPostalCode,
-        ShipCountry
-      ]
+      "INSERT INTO orders SET ?",
+      payload
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error, {
+      onReferenced: "No se puede eliminar la orden porque tiene detalles asociados",
+    });
   }
 };
 
 // UPDATE
 exports.updateOrder = async (req, res) => {
   try {
-    const {
-      CustomerID,
-      EmployeeID,
-      OrderDate,
-      RequiredDate,
-      ShippedDate,
-      ShipVia,
-      Freight,
-      ShipName,
-      ShipAddress,
-      ShipCity,
-      ShipRegion,
-      ShipPostalCode,
-      ShipCountry
-    } = req.body;
+    const payload = ordersModel.updateData(req.body);
 
     const [result] = await db.query(
-      `UPDATE orders SET
-        CustomerID = ?,
-        EmployeeID = ?,
-        OrderDate = ?,
-        RequiredDate = ?,
-        ShippedDate = ?,
-        ShipVia = ?,
-        Freight = ?,
-        ShipName = ?,
-        ShipAddress = ?,
-        ShipCity = ?,
-        ShipRegion = ?,
-        ShipPostalCode = ?,
-        ShipCountry = ?
-      WHERE OrderID = ?`,
-      [
-        CustomerID,
-        EmployeeID,
-        OrderDate,
-        RequiredDate,
-        ShippedDate,
-        ShipVia,
-        Freight,
-        ShipName,
-        ShipAddress,
-        ShipCity,
-        ShipRegion,
-        ShipPostalCode,
-        ShipCountry,
-        req.params.id
-      ]
+      "UPDATE orders SET ? WHERE OrderID = ?",
+      [payload, req.params.id]
     );
 
     if (result.affectedRows === 0) {
@@ -135,7 +64,7 @@ exports.updateOrder = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -153,6 +82,6 @@ exports.deleteOrder = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };

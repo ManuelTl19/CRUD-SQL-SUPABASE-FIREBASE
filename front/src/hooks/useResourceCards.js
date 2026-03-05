@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
+import Swal from 'sweetalert2'
 import { resourcesApi } from '../services/resourcesApi'
 import { RESOURCES } from '../config/resources'
 import { isPlainObject } from '../utils/format'
 import { buildResourceIdPath, extractIdValuesFromRow } from '../utils/resource'
+
+const DEFAULT_PAGE_SIZE = 20
+const PAGE_SIZE_OPTIONS = [20, 50, 100]
 
 const getUnionKeys = (rows) => {
   const set = new Set()
@@ -20,12 +24,46 @@ const createEmptyByFields = (fields) =>
     return acc
   }, {})
 
+const sortRows = (rows, field, direction) => {
+  if (!field) {
+    return rows
+  }
+
+  return [...rows].sort((a, b) => {
+    const left = a?.[field]
+    const right = b?.[field]
+
+    if (left === right) {
+      return 0
+    }
+
+    if (left === null || left === undefined) {
+      return 1
+    }
+
+    if (right === null || right === undefined) {
+      return -1
+    }
+
+    const leftComparable = String(left).toLowerCase()
+    const rightComparable = String(right).toLowerCase()
+
+    if (direction === 'desc') {
+      return rightComparable.localeCompare(leftComparable, 'es')
+    }
+
+    return leftComparable.localeCompare(rightComparable, 'es')
+  })
+}
+
 export function useResourceCards(resource) {
   const [rows, setRows] = useState([])
   const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [resultMessage, setResultMessage] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSizeState] = useState(DEFAULT_PAGE_SIZE)
 
   const [formOpen, setFormOpen] = useState(false)
   const [formMode, setFormMode] = useState('create')
@@ -34,6 +72,9 @@ export function useResourceCards(resource) {
   const [foreignKeyOptions, setForeignKeyOptions] = useState({})
 
   const fields = useMemo(() => getUnionKeys(rows), [rows])
+  const [sortField, setSortField] = useState('')
+  const [sortDirection, setSortDirection] = useState('asc')
+
   const formFields = useMemo(() => {
     if (Array.isArray(resource.formFields) && resource.formFields.length > 0) {
       return resource.formFields
@@ -42,15 +83,35 @@ export function useResourceCards(resource) {
   }, [resource.formFields, fields])
 
   const foreignKeyConfig = useMemo(() => resource.foreignKeys || {}, [resource.foreignKeys])
+  const fieldTypes = useMemo(() => resource.fieldTypes || {}, [resource.fieldTypes])
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query.trim().toLowerCase())
+    }, 250)
+
+    return () => clearTimeout(timer)
+  }, [query])
+
+  useEffect(() => {
+    const stored = localStorage.getItem('cards-page-size')
+    const parsed = Number(stored)
+    if (PAGE_SIZE_OPTIONS.includes(parsed)) {
+      setPageSizeState(parsed)
+    }
+  }, [])
 
   const filteredRows = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase()
-    if (!normalizedQuery) {
+    if (!debouncedQuery) {
       return rows
     }
 
-    return rows.filter((row) => JSON.stringify(row).toLowerCase().includes(normalizedQuery))
-  }, [rows, query])
+    return rows.filter((row) => JSON.stringify(row).toLowerCase().includes(debouncedQuery))
+  }, [rows, debouncedQuery])
+
+  const sortedRows = useMemo(() => {
+    return sortRows(filteredRows, sortField, sortDirection)
+  }, [filteredRows, sortField, sortDirection])
 
   const list = async () => {
     setLoading(true)
@@ -59,7 +120,13 @@ export function useResourceCards(resource) {
       const data = await resourcesApi.list(resource.key)
       setRows(Array.isArray(data) ? data : [])
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo obtener la lista')
+      const message = err instanceof Error ? err.message : 'No se pudo obtener la lista'
+      setError(message)
+      await Swal.fire({
+        title: 'Error al cargar',
+        text: message,
+        icon: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -68,12 +135,15 @@ export function useResourceCards(resource) {
   useEffect(() => {
     setRows([])
     setQuery('')
+    setDebouncedQuery('')
     setError('')
-    setResultMessage('')
     setFormOpen(false)
     setEditingPath(null)
     setFormData({})
     setForeignKeyOptions({})
+    setCurrentPage(1)
+    setSortField('')
+    setSortDirection('asc')
     list()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.key])
@@ -128,8 +198,34 @@ export function useResourceCards(resource) {
   }
 
   const buildPayloadForSubmit = (rawFormData, mode) => {
+    const parseValueByType = (field, rawValue) => {
+      const type = fieldTypes[field]
+
+      if (type === 'number') {
+        const parsed = Number(rawValue)
+        return Number.isNaN(parsed) ? rawValue : parsed
+      }
+
+      if (type === 'checkbox') {
+        if (rawValue === true || rawValue === false) {
+          return rawValue ? 1 : 0
+        }
+        if (rawValue === '1' || rawValue === 'true') {
+          return 1
+        }
+        if (rawValue === '0' || rawValue === 'false') {
+          return 0
+        }
+        return rawValue
+      }
+
+      return rawValue
+    }
+
     const basePayload = Object.fromEntries(
-      Object.entries(rawFormData).filter(([, value]) => value !== '')
+      Object.entries(rawFormData)
+        .filter(([, value]) => value !== '')
+        .map(([key, value]) => [key, parseValueByType(key, value)])
     )
 
     if (mode === 'edit') {
@@ -147,8 +243,14 @@ export function useResourceCards(resource) {
     setEditingPath(null)
     setFormData(createEmptyByFields(formFields))
     setFormOpen(true)
-    loadForeignKeyOptions().catch(() => {
-      setError('No se pudieron cargar algunas opciones relacionadas')
+    loadForeignKeyOptions().catch(async () => {
+      const message = 'No se pudieron cargar algunas opciones relacionadas'
+      setError(message)
+      await Swal.fire({
+        title: 'Error al cargar datos',
+        text: message,
+        icon: 'error',
+      })
     })
   }
 
@@ -156,7 +258,13 @@ export function useResourceCards(resource) {
     const idValues = extractIdValuesFromRow(resource, row, {})
     const idPath = buildResourceIdPath(resource, idValues)
     if (!idPath) {
-      setError('No se pudo determinar el ID para editar este registro')
+      const message = 'No se pudo determinar el ID para editar este registro'
+      setError(message)
+      void Swal.fire({
+        title: 'No se pudo editar',
+        text: message,
+        icon: 'error',
+      })
       return
     }
 
@@ -168,8 +276,14 @@ export function useResourceCards(resource) {
     })
     setFormData(initialData)
     setFormOpen(true)
-    loadForeignKeyOptions().catch(() => {
-      setError('No se pudieron cargar algunas opciones relacionadas')
+    loadForeignKeyOptions().catch(async () => {
+      const message = 'No se pudieron cargar algunas opciones relacionadas'
+      setError(message)
+      await Swal.fire({
+        title: 'Error al cargar datos',
+        text: message,
+        icon: 'error',
+      })
     })
   }
 
@@ -177,7 +291,27 @@ export function useResourceCards(resource) {
     const idValues = extractIdValuesFromRow(resource, row, {})
     const idPath = buildResourceIdPath(resource, idValues)
     if (!idPath) {
-      setError('No se pudo determinar el ID para eliminar este registro')
+      const message = 'No se pudo determinar el ID para eliminar este registro'
+      setError(message)
+      void Swal.fire({
+        title: 'No se pudo eliminar',
+        text: message,
+        icon: 'error',
+      })
+      return
+    }
+
+    const confirmation = await Swal.fire({
+      title: 'Confirmar eliminacion',
+      text: 'Esta accion puede afectar datos relacionados. Deseas continuar?',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Si, eliminar',
+      cancelButtonText: 'Cancelar',
+      confirmButtonColor: '#dc2626',
+    })
+
+    if (!confirmation.isConfirmed) {
       return
     }
 
@@ -185,10 +319,22 @@ export function useResourceCards(resource) {
     setError('')
     try {
       await resourcesApi.deleteByPath(idPath)
-      setResultMessage('Registro eliminado correctamente')
+      await Swal.fire({
+        title: 'Eliminado',
+        text: 'El registro se elimino correctamente',
+        icon: 'success',
+        timer: 1600,
+        showConfirmButton: false,
+      })
       await list()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo eliminar el registro')
+      const message = err instanceof Error ? err.message : 'No se pudo eliminar el registro'
+      setError(message)
+      await Swal.fire({
+        title: 'No se pudo eliminar',
+        text: message,
+        icon: 'error',
+      })
     } finally {
       setLoading(false)
     }
@@ -201,23 +347,61 @@ export function useResourceCards(resource) {
     try {
       if (formMode === 'create') {
         await resourcesApi.create(resource.key, buildPayloadForSubmit(formData, 'create'))
-        setResultMessage('Registro creado correctamente')
+        await Swal.fire({
+          title: 'Registro creado',
+          text: 'La informacion se guardo correctamente',
+          icon: 'success',
+          timer: 1600,
+          showConfirmButton: false,
+        })
       } else {
         if (!resource.canUpdate || !editingPath) {
           throw new Error('Este recurso no soporta actualización o no tiene un ID válido')
         }
         await resourcesApi.updateByPath(editingPath, buildPayloadForSubmit(formData, 'edit'))
-        setResultMessage('Registro actualizado correctamente')
+        await Swal.fire({
+          title: 'Registro actualizado',
+          text: 'Los cambios se guardaron correctamente',
+          icon: 'success',
+          timer: 1600,
+          showConfirmButton: false,
+        })
       }
 
       setFormOpen(false)
       await list()
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'No se pudo guardar el registro')
+      const message = err instanceof Error ? err.message : 'No se pudo guardar el registro'
+      setError(message)
+      await Swal.fire({
+        title: 'No se pudo guardar',
+        text: message,
+        icon: 'error',
+      })
     } finally {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedQuery, resource.key, pageSize, sortField, sortDirection])
+
+  const totalPages = useMemo(() => {
+    return Math.max(1, Math.ceil(sortedRows.length / pageSize))
+  }, [sortedRows.length, pageSize])
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages)
+    }
+  }, [currentPage, totalPages])
+
+  const paginatedRows = useMemo(() => {
+    const safePage = Math.min(currentPage, totalPages)
+    const start = (safePage - 1) * pageSize
+    return sortedRows.slice(start, start + pageSize)
+  }, [currentPage, sortedRows, totalPages, pageSize])
 
   const visibleFields = useMemo(() => {
     if (formFields.length > 0) {
@@ -231,17 +415,54 @@ export function useResourceCards(resource) {
     return fields
   }, [fields, formData, formFields])
 
+  const sortFields = useMemo(() => {
+    const fromConfig = Array.isArray(resource.formFields) ? resource.formFields : []
+    const fallback = fields
+    const merged = fromConfig.length ? fromConfig : fallback
+    return merged.slice(0, 12)
+  }, [fields, resource.formFields])
+
+  const goToPage = (page) => {
+    const nextPage = Math.max(1, Math.min(page, totalPages))
+    setCurrentPage(nextPage)
+  }
+
+  const setPageSize = (nextSize) => {
+    if (!PAGE_SIZE_OPTIONS.includes(nextSize)) {
+      return
+    }
+    setPageSizeState(nextSize)
+    localStorage.setItem('cards-page-size', String(nextSize))
+  }
+
+  const visibleStart = sortedRows.length === 0 ? 0 : (currentPage - 1) * pageSize + 1
+  const visibleEnd = Math.min(currentPage * pageSize, sortedRows.length)
+
   return {
     rows,
+    totalRows: rows.length,
     filteredRows,
+    sortedRows,
+    paginatedRows,
+    pageSize,
+    pageSizeOptions: PAGE_SIZE_OPTIONS,
+    setPageSize,
+    currentPage,
+    totalPages,
+    visibleStart,
+    visibleEnd,
+    goToPage,
+    sortFields,
+    sortField,
+    setSortField,
+    sortDirection,
+    setSortDirection,
     fields,
     visibleFields,
     query,
     setQuery,
     loading,
     error,
-    resultMessage,
-    clearResultMessage: () => setResultMessage(''),
     list,
     formOpen,
     formMode,

@@ -1,4 +1,6 @@
 const db = require("../config/db");
+const employeeTerritoriesModel = require("../modelos/employeeTerritories.model");
+const { sendDbError } = require("./_dbErrors");
 
 // GET ALL
 exports.getAllEmployeeTerritories = async (req, res) => {
@@ -6,7 +8,7 @@ exports.getAllEmployeeTerritories = async (req, res) => {
     const [rows] = await db.query("SELECT * FROM employeeterritories");
     res.json(rows);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -26,23 +28,23 @@ exports.getEmployeeTerritoryById = async (req, res) => {
 
     res.json(rows[0]);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
 // CREATE
 exports.createEmployeeTerritory = async (req, res) => {
   try {
-    const { EmployeeID, TerritoryID } = req.body;
+    const payload = employeeTerritoriesModel.createData(req.body);
 
     const [result] = await db.query(
       "INSERT INTO employeeterritories (EmployeeID, TerritoryID) VALUES (?, ?)",
-      [EmployeeID, TerritoryID]
+      [payload.EmployeeID, payload.TerritoryID]
     );
 
     res.status(201).json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
 
@@ -62,6 +64,6 @@ exports.deleteEmployeeTerritory = async (req, res) => {
 
     res.json(result);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    sendDbError(res, error);
   }
 };
