@@ -29,11 +29,25 @@ exports.getById = async (req, res) => {
 // Crear categoría
 exports.create = async (req, res) => {
   try {
-    const [result] = await db.query(
-      "INSERT INTO categories SET ?",
-      req.body
-    );
-    res.status(201).json({ message: "Categoría creada", id: result.insertId });
+    const payload = { ...req.body };
+
+    const hasCategoryId =
+      payload.CategoryID !== undefined &&
+      payload.CategoryID !== null &&
+      String(payload.CategoryID).trim() !== "";
+
+    // Fallback for schemas where CategoryID is not AUTO_INCREMENT.
+    if (!hasCategoryId) {
+      const [maxRows] = await db.query(
+        "SELECT COALESCE(MAX(CategoryID), -1) AS maxId FROM categories"
+      );
+      payload.CategoryID = Number(maxRows?.[0]?.maxId ?? -1) + 1;
+    }
+
+    const [result] = await db.query("INSERT INTO categories SET ?", payload);
+    const createdId = payload.CategoryID ?? result.insertId;
+
+    res.status(201).json({ message: "Categoría creada", id: createdId });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -67,6 +81,11 @@ exports.remove = async (req, res) => {
     }
     res.json({ message: "Categoría eliminada" });
   } catch (error) {
+    if (error.code === "ER_ROW_IS_REFERENCED_2") {
+      return res.status(409).json({
+        message: "No se puede eliminar la categoría porque tiene productos asociados",
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 };

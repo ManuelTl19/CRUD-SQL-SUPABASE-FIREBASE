@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { resourcesApi } from '../services/resourcesApi'
+import { RESOURCES } from '../config/resources'
 import { isPlainObject } from '../utils/format'
 import { buildResourceIdPath, extractIdValuesFromRow } from '../utils/resource'
 
@@ -30,8 +31,17 @@ export function useResourceCards(resource) {
   const [formMode, setFormMode] = useState('create')
   const [formData, setFormData] = useState({})
   const [editingPath, setEditingPath] = useState(null)
+  const [foreignKeyOptions, setForeignKeyOptions] = useState({})
 
   const fields = useMemo(() => getUnionKeys(rows), [rows])
+  const formFields = useMemo(() => {
+    if (Array.isArray(resource.formFields) && resource.formFields.length > 0) {
+      return resource.formFields
+    }
+    return fields
+  }, [resource.formFields, fields])
+
+  const foreignKeyConfig = useMemo(() => resource.foreignKeys || {}, [resource.foreignKeys])
 
   const filteredRows = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase()
@@ -63,15 +73,83 @@ export function useResourceCards(resource) {
     setFormOpen(false)
     setEditingPath(null)
     setFormData({})
+    setForeignKeyOptions({})
     list()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resource.key])
 
+  const loadForeignKeyOptions = async () => {
+    const entries = Object.entries(foreignKeyConfig)
+    if (entries.length === 0) {
+      setForeignKeyOptions({})
+      return
+    }
+
+    const lookupByKey = Object.fromEntries(RESOURCES.map((entry) => [entry.key, entry]))
+
+    const uniqueResourceKeys = Array.from(new Set(entries.map(([, config]) => config.resourceKey)))
+
+    const datasets = await Promise.all(
+      uniqueResourceKeys.map(async (resourceKey) => {
+        const data = await resourcesApi.list(resourceKey)
+        return [resourceKey, Array.isArray(data) ? data : []]
+      })
+    )
+
+    const datasetMap = Object.fromEntries(datasets)
+    const nextOptions = {}
+
+    entries.forEach(([field, config]) => {
+      const rowsForResource = datasetMap[config.resourceKey] || []
+      const refResource = lookupByKey[config.resourceKey]
+      const fallbackId = refResource?.idKeys?.[0]
+      const valueKey = config.valueKey || fallbackId
+
+      nextOptions[field] = rowsForResource
+        .map((row) => {
+          const value = row?.[valueKey]
+          if (value === undefined || value === null || value === '') {
+            return null
+          }
+
+          const label = config.labelKey && row?.[config.labelKey] != null
+            ? `${value} - ${String(row[config.labelKey])}`
+            : String(value)
+
+          return {
+            value: String(value),
+            label,
+          }
+        })
+        .filter(Boolean)
+    })
+
+    setForeignKeyOptions(nextOptions)
+  }
+
+  const buildPayloadForSubmit = (rawFormData, mode) => {
+    const basePayload = Object.fromEntries(
+      Object.entries(rawFormData).filter(([, value]) => value !== '')
+    )
+
+    if (mode === 'edit') {
+      const idSet = new Set(resource.idKeys)
+      return Object.fromEntries(
+        Object.entries(basePayload).filter(([key]) => !idSet.has(key))
+      )
+    }
+
+    return basePayload
+  }
+
   const openCreateForm = () => {
     setFormMode('create')
     setEditingPath(null)
-    setFormData(createEmptyByFields(fields))
+    setFormData(createEmptyByFields(formFields))
     setFormOpen(true)
+    loadForeignKeyOptions().catch(() => {
+      setError('No se pudieron cargar algunas opciones relacionadas')
+    })
   }
 
   const openEditForm = (row) => {
@@ -84,8 +162,15 @@ export function useResourceCards(resource) {
 
     setFormMode('edit')
     setEditingPath(idPath)
-    setFormData({ ...row })
+    const initialData = createEmptyByFields(formFields)
+    formFields.forEach((field) => {
+      initialData[field] = row?.[field] ?? ''
+    })
+    setFormData(initialData)
     setFormOpen(true)
+    loadForeignKeyOptions().catch(() => {
+      setError('No se pudieron cargar algunas opciones relacionadas')
+    })
   }
 
   const remove = async (row) => {
@@ -115,13 +200,13 @@ export function useResourceCards(resource) {
 
     try {
       if (formMode === 'create') {
-        await resourcesApi.create(resource.key, formData)
+        await resourcesApi.create(resource.key, buildPayloadForSubmit(formData, 'create'))
         setResultMessage('Registro creado correctamente')
       } else {
         if (!resource.canUpdate || !editingPath) {
           throw new Error('Este recurso no soporta actualización o no tiene un ID válido')
         }
-        await resourcesApi.updateByPath(editingPath, formData)
+        await resourcesApi.updateByPath(editingPath, buildPayloadForSubmit(formData, 'edit'))
         setResultMessage('Registro actualizado correctamente')
       }
 
@@ -135,11 +220,16 @@ export function useResourceCards(resource) {
   }
 
   const visibleFields = useMemo(() => {
+    if (formFields.length > 0) {
+      return formFields
+    }
+
     if (Object.keys(formData).length > 0) {
       return Object.keys(formData)
     }
+
     return fields
-  }, [fields, formData])
+  }, [fields, formData, formFields])
 
   return {
     rows,
@@ -157,6 +247,7 @@ export function useResourceCards(resource) {
     formMode,
     formData,
     setFormData,
+    foreignKeyOptions,
     openCreateForm,
     openEditForm,
     closeForm: () => setFormOpen(false),

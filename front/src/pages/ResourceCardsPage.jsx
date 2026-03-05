@@ -44,6 +44,7 @@ export function ResourceCardsPage() {
     formMode,
     formData,
     setFormData,
+    foreignKeyOptions,
     openCreateForm,
     openEditForm,
     closeForm,
@@ -171,17 +172,38 @@ export function ResourceCardsPage() {
               {(visibleFields.length ? visibleFields : fields).map((field) => (
                 <label key={field}>
                   {field}
-                  <input
-                    type="text"
-                    value={formData[field] ?? ''}
-                    onChange={(event) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        [field]: event.target.value,
-                      }))
-                    }
-                    placeholder={`Valor para ${field}`}
-                  />
+                  {Array.isArray(foreignKeyOptions[field]) ? (
+                    <select
+                      value={formData[field] ?? ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          [field]: event.target.value,
+                        }))
+                      }
+                      disabled={formMode === 'edit' && resource.idKeys.includes(field)}
+                    >
+                      <option value="">Selecciona {field}</option>
+                      {foreignKeyOptions[field].map((option) => (
+                        <option key={`${field}-${option.value}`} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData[field] ?? ''}
+                      onChange={(event) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          [field]: event.target.value,
+                        }))
+                      }
+                      placeholder={`Valor para ${field}`}
+                      disabled={formMode === 'edit' && resource.idKeys.includes(field)}
+                    />
+                  )}
                 </label>
               ))}
             </div>
