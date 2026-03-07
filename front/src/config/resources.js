@@ -118,6 +118,8 @@ export const RESOURCES = [
       'UnitsInStock',
       'UnitsOnOrder',
       'ReorderLevel',
+      'stock',
+      'isLowStock',
       'Discontinued',
     ],
     fieldLabels: {
@@ -130,6 +132,8 @@ export const RESOURCES = [
       UnitsInStock: 'Unidades en stock',
       UnitsOnOrder: 'Unidades en pedido',
       ReorderLevel: 'Nivel de reorden',
+      stock: 'Stock actual',
+      isLowStock: 'Stock bajo',
       Discontinued: 'Descontinuado',
     },
     fieldTypes: {
@@ -140,6 +144,8 @@ export const RESOURCES = [
       UnitsInStock: 'number',
       UnitsOnOrder: 'number',
       ReorderLevel: 'number',
+      stock: 'number',
+      isLowStock: 'checkbox',
       Discontinued: 'checkbox',
     },
     foreignKeys: {
@@ -291,6 +297,7 @@ export const RESOURCES = [
       'ShipRegion',
       'ShipPostalCode',
       'ShipCountry',
+      'status',
     ],
     fieldLabels: {
       OrderID: 'ID de pedido',
@@ -307,6 +314,7 @@ export const RESOURCES = [
       ShipRegion: 'Region de envio',
       ShipPostalCode: 'Codigo postal de envio',
       ShipCountry: 'Pais de envio',
+      status: 'Estado',
     },
     fieldTypes: {
       OrderID: 'number',
@@ -316,6 +324,7 @@ export const RESOURCES = [
       RequiredDate: 'datetime-local',
       ShippedDate: 'datetime-local',
       Freight: 'number',
+      status: 'text',
     },
     foreignKeys: {
       CustomerID: {

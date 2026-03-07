@@ -1,0 +1,27 @@
+{
+  "provider": "supabase",
+  "counters": {
+    "inventory-movements": 0,
+    "sales": 0,
+    "purchase-requests": 1
+  },
+  "resources": {
+    "inventory-movements": [],
+    "sales": [],
+    "purchase-requests": [
+      {
+        "id": 1,
+        "supplierName": "kwl",
+        "requesterName": "maka",
+        "requestDate": "2026-03-15T03:33:00.000Z",
+        "expectedDate": "2026-03-20T05:33:00.000Z",
+        "totalEstimated": 3,
+        "status": "mslmslsm",
+        "notes": ",mslsm",
+        "items": [],
+        "createdAt": "2026-03-06T01:33:45.720Z",
+        "sourceDb": "supabase"
+      }
+    ]
+  }
+}

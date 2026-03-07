@@ -3,6 +3,8 @@ const router = express.Router();
 const controller = require("../controllers/suppliers.controller");
 
 router.get("/", controller.getAll);
+router.get("/:id/purchase-request-pdf", controller.getPurchaseRequestPdf);
+router.post("/:id/purchase-request-pdf", controller.getPurchaseRequestPdf);
 router.get("/:id", controller.getById);
 router.post("/", controller.create);
 router.put("/:id", controller.update);

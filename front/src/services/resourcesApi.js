@@ -1,4 +1,29 @@
+import { API_BASE_URL } from '../config/env'
 import { request } from './httpClient'
+
+async function downloadPdf(path, filename, options = {}) {
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: options.method || 'GET',
+    headers: {
+      ...(options.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  })
+
+  if (!response.ok) {
+    throw new Error(`No se pudo descargar PDF (${response.status})`)
+  }
+
+  const blob = await response.blob()
+  const objectUrl = window.URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.URL.revokeObjectURL(objectUrl)
+}
 
 export const resourcesApi = {
   list(resourceKey) {
@@ -27,5 +52,26 @@ export const resourcesApi = {
     return request(`/api${resourceIdPath}`, {
       method: 'DELETE',
     })
+  },
+
+  confirmSale(orderId) {
+    return request(`/api/orders/${orderId}/confirm-sale`, {
+      method: 'POST',
+    })
+  },
+
+  downloadSaleNotePdf(orderId) {
+    return downloadPdf(`/api/orders/${orderId}/sale-note-pdf`, `nota-venta-${orderId}.pdf`)
+  },
+
+  downloadSupplierPurchaseRequestPdf(supplierId, payload) {
+    return downloadPdf(
+      `/api/suppliers/${supplierId}/purchase-request-pdf`,
+      `solicitud-compra-proveedor-${supplierId}.pdf`,
+      {
+        method: 'POST',
+        body: payload,
+      }
+    )
   },
 }

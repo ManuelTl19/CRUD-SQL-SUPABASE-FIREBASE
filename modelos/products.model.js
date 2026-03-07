@@ -10,6 +10,8 @@ const CREATE_FIELDS = [
   "UnitsInStock",
   "UnitsOnOrder",
   "ReorderLevel",
+  "stock",
+  "isLowStock",
   "Discontinued",
 ];
 const UPDATE_FIELDS = CREATE_FIELDS.filter((field) => field !== "ProductID");

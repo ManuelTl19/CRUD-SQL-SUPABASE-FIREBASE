@@ -2,19 +2,23 @@ import {
   AtSign,
   ArrowDownAZ,
   ArrowUpZA,
+  FileDown,
   Pencil,
   Plus,
   RefreshCw,
   Save,
   Search,
   SlidersHorizontal,
+  Truck,
   Trash2,
   X,
 } from 'lucide-react'
 import { useMemo } from 'react'
+import Swal from 'sweetalert2'
 import { useParams } from 'react-router-dom'
 import { RESOURCES } from '../config/resources'
 import { useResourceCards } from '../hooks/useResourceCards'
+import { resourcesApi } from '../services/resourcesApi'
 
 const getTitleField = (row) => {
   const keys = Object.keys(row)
@@ -107,6 +111,119 @@ export function ResourceCardsPage() {
   }, [currentPage, totalPages])
 
   const loadingSkeleton = loading && cards.length === 0
+  const isOrdersResource = resource.key === 'orders'
+  const isSuppliersResource = resource.key === 'suppliers'
+
+  const askId = async (title, label) => {
+    const response = await Swal.fire({
+      title,
+      input: 'number',
+      inputLabel: label,
+      showCancelButton: true,
+      confirmButtonText: 'Continuar',
+      cancelButtonText: 'Cancelar',
+      inputValidator: (value) => {
+        if (!value || Number(value) <= 0) {
+          return 'Ingresa un ID valido'
+        }
+
+        return undefined
+      },
+    })
+
+    if (!response.isConfirmed) {
+      return null
+    }
+
+    return Number(response.value)
+  }
+
+  const confirmSale = async () => {
+    const orderId = await askId('Confirmar venta', 'ID de pedido')
+    if (!orderId) {
+      return
+    }
+
+    try {
+      await resourcesApi.confirmSale(orderId)
+      await Swal.fire({
+        title: 'Venta confirmada',
+        text: `Pedido ${orderId} marcado como vendido`,
+        icon: 'success',
+      })
+      await list()
+    } catch (error) {
+      await Swal.fire({
+        title: 'No se pudo confirmar',
+        text: error instanceof Error ? error.message : 'Error inesperado',
+        icon: 'error',
+      })
+    }
+  }
+
+  const downloadSaleNote = async () => {
+    const orderId = await askId('Generar nota de venta (PDF)', 'ID de pedido')
+    if (!orderId) {
+      return
+    }
+
+    try {
+      await resourcesApi.downloadSaleNotePdf(orderId)
+    } catch (error) {
+      await Swal.fire({
+        title: 'No se pudo descargar',
+        text: error instanceof Error ? error.message : 'Error inesperado',
+        icon: 'error',
+      })
+    }
+  }
+
+  const downloadSupplierRequest = async () => {
+    const supplierId = await askId('Solicitud de compra a proveedor (PDF)', 'ID de proveedor')
+    if (!supplierId) {
+      return
+    }
+
+    const formResponse = await Swal.fire({
+      title: 'Datos de la solicitud',
+      html: `
+        <input id="req-name" class="swal2-input" placeholder="Solicitante" value="Compras" />
+        <input id="req-area" class="swal2-input" placeholder="Area" value="Area de Compras" />
+        <input id="req-date" class="swal2-input" type="date" placeholder="Fecha requerida" />
+        <textarea id="req-notes" class="swal2-textarea" placeholder="Notas para proveedor"></textarea>
+      `,
+      showCancelButton: true,
+      confirmButtonText: 'Generar PDF',
+      cancelButtonText: 'Cancelar',
+      preConfirm: () => {
+        const requesterName = document.getElementById('req-name')?.value?.trim()
+        const requesterArea = document.getElementById('req-area')?.value?.trim()
+        const neededDate = document.getElementById('req-date')?.value?.trim()
+        const notes = document.getElementById('req-notes')?.value?.trim()
+
+        if (!requesterName || !requesterArea) {
+          Swal.showValidationMessage('Solicitante y area son obligatorios')
+          return null
+        }
+
+        return { requesterName, requesterArea, neededDate, notes }
+      },
+    })
+
+    if (!formResponse.isConfirmed || !formResponse.value) {
+      return
+    }
+
+    try {
+      await resourcesApi.downloadSupplierPurchaseRequestPdf(supplierId, formResponse.value)
+    } catch (error) {
+      await Swal.fire({
+        title: 'No se pudo descargar',
+        text: error instanceof Error ? error.message : 'Error inesperado',
+        icon: 'error',
+      })
+    }
+  }
 
   return (
     <main className="content">
@@ -203,6 +320,27 @@ export function ResourceCardsPage() {
             <Plus size={16} />
             Nuevo
           </button>
+
+          {isOrdersResource ? (
+            <button className="btn btn-secondary" onClick={confirmSale}>
+              <Truck size={16} />
+              Confirmar venta
+            </button>
+          ) : null}
+
+          {isOrdersResource ? (
+            <button className="btn btn-secondary" onClick={downloadSaleNote}>
+              <FileDown size={16} />
+              Generar nota venta (PDF)
+            </button>
+          ) : null}
+
+          {isSuppliersResource ? (
+            <button className="btn btn-secondary" onClick={downloadSupplierRequest}>
+              <FileDown size={16} />
+              Solicitud compra (PDF)
+            </button>
+          ) : null}
         </div>
       </section>
 

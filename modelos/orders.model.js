@@ -15,6 +15,7 @@ const CREATE_FIELDS = [
   "ShipRegion",
   "ShipPostalCode",
   "ShipCountry",
+  "status",
 ];
 const UPDATE_FIELDS = CREATE_FIELDS.filter((field) => field !== "OrderID");
 

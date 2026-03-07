@@ -238,7 +238,39 @@ Incluye rutas genéricas para todos los recursos y detalles específicos para:
 - No hay tests automáticos configurados actualmente.
 - Si quieres homogeneizar respuestas, conviene crear una capa común de respuesta (ej. `success`, `error`, `data`).
 
-## 15) Troubleshooting
+## 15) Funcionalidades escolares (MySQL)
+
+Se agrego soporte para inventario/ventas y PDFs usando Northwind actual:
+
+- Migracion SQL: `tools/school-project-mysql.sql`
+- Migracion automatica al iniciar: `config/startupMigrations.js`
+
+Cambios de esquema:
+
+- `products.stock` (INT)
+- `products.isLowStock` (TINYINT)
+- `orders.status` (VARCHAR) con default `pendiente`
+
+Reglas aplicadas:
+
+- Stock bajo cuando `stock < 10`.
+- Al confirmar venta se descuenta stock por `order_details`.
+- El pedido se marca `vendido`.
+
+Endpoints nuevos:
+
+- `GET /api/products/low-stock`
+- `POST /api/orders/:id/confirm-sale`
+- `GET /api/orders/:id/sale-note-pdf`
+- `GET /api/suppliers/:id/purchase-request-pdf`
+
+Interfaz:
+
+- En `Pedidos`: botones `Confirmar venta` y `Generar nota venta (PDF)`.
+- En `Proveedores`: boton `Solicitud compra (PDF)`.
+- En `Productos`: campos `stock` e `isLowStock` visibles/editables.
+
+## 16) Troubleshooting
 
 ### Error de conexión a DB
 

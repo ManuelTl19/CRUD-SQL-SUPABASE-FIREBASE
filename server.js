@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const swaggerUi = require("swagger-ui-express");
 const openApiSpec = require("./config/openapi");
+const { runStartupMigrations } = require("./config/startupMigrations");
 
 const app = express();
 
@@ -44,6 +45,16 @@ app.use("/api/employee-territories", require("./routes/employeeTerritories.route
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en puerto ${PORT}`);
-});
+async function bootstrap() {
+  try {
+    await runStartupMigrations();
+    app.listen(PORT, () => {
+      console.log(`Servidor corriendo en puerto ${PORT}`);
+    });
+  } catch (error) {
+    console.error("No se pudo iniciar la app:", error.message);
+    process.exit(1);
+  }
+}
+
+bootstrap();
