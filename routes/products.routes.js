@@ -4,6 +4,7 @@ const controller = require("../controllers/products.controller");
 
 router.get("/", controller.getAll);
 router.get("/low-stock", controller.getLowStock);
+router.post("/:id/stock-output", controller.stockOutput);
 router.get("/:id", controller.getById);
 router.post("/", controller.create);
 router.put("/:id", controller.update);

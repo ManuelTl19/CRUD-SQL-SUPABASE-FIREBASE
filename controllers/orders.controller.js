@@ -274,10 +274,14 @@ exports.getSaleNotePdf = async (req, res) => {
 
   try {
     const [orderRows] = await db.query(
-      `SELECT o.OrderID, o.OrderDate, o.status,
-              c.CompanyName AS CustomerName
+      `SELECT o.OrderID, o.CustomerID, o.OrderDate, o.RequiredDate, o.ShippedDate,
+              o.Freight, o.ShipName, o.ShipAddress, o.ShipCity, o.ShipRegion,
+              o.ShipPostalCode, o.ShipCountry, o.status,
+              o.EmployeeID,
+              e.FirstName AS EmployeeFirstName,
+              e.LastName AS EmployeeLastName
        FROM orders o
-       LEFT JOIN customers c ON c.CustomerID = o.CustomerID
+       LEFT JOIN employees e ON e.EmployeeID = o.EmployeeID
        WHERE o.OrderID = ?`,
       [orderId]
     );
@@ -289,13 +293,23 @@ exports.getSaleNotePdf = async (req, res) => {
     const [detailRows] = await db.query(
       `SELECT od.ProductID, p.ProductName, od.Quantity, od.UnitPrice, od.Discount
        FROM order_details od
-       LEFT JOIN products p ON p.ProductID = od.ProductID
+       INNER JOIN products p ON p.ProductID = od.ProductID
        WHERE od.OrderID = ?`,
       [orderId]
     );
 
     const order = orderRows[0];
-    let total = 0;
+    const status = String(order.status || "pendiente").toLowerCase();
+    if (status !== "vendido") {
+      return res.status(409).json({
+        message: "Primero confirma la venta del pedido para generar su PDF",
+      });
+    }
+
+    const freightCost = Number(order.Freight || 0);
+    let productSubtotal = 0;
+    let discountTotal = 0;
+
     const items = [];
     if (detailRows.length === 0) {
       items.push({
@@ -309,8 +323,12 @@ exports.getSaleNotePdf = async (req, res) => {
         const quantity = Number(item.Quantity || 0);
         const unitPrice = Number(item.UnitPrice || 0);
         const discount = Number(item.Discount || 0);
-        const lineTotal = quantity * unitPrice * (1 - discount);
-        total += lineTotal;
+        const grossLineTotal = quantity * unitPrice;
+        const discountAmount = grossLineTotal * discount;
+        const lineTotal = grossLineTotal - discountAmount;
+
+        productSubtotal += grossLineTotal;
+        discountTotal += discountAmount;
 
         items.push({
           name: item.ProductName || `Producto ${item.ProductID}`,
@@ -321,23 +339,44 @@ exports.getSaleNotePdf = async (req, res) => {
       });
     }
 
-    const pdfBuffer = createTicketPdf({
+    const finalTotal = productSubtotal - discountTotal + freightCost;
+    const saleDate = order.ShippedDate || order.OrderDate || new Date().toISOString();
+    const sellerName = [order.EmployeeFirstName, order.EmployeeLastName]
+      .filter(Boolean)
+      .join(" ") || `Empleado ${order.EmployeeID || "N/A"}`;
+    const shippingAddress = [
+      order.ShipAddress,
+      order.ShipCity,
+      order.ShipRegion,
+      order.ShipPostalCode,
+      order.ShipCountry,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
+    const pdfBuffer = await createTicketPdf({
+      layout: "sale-note-invoice",
       title: "NOTA DE VENTA",
-      subtitle: "Northwind - Punto de Venta",
-      meta: [
-        { label: "Pedido", value: order.OrderID },
-        { label: "Cliente", value: order.CustomerName || "N/A" },
-        { label: "Fecha", value: order.OrderDate || new Date().toISOString() },
-        { label: "Estado", value: order.status || "pendiente" },
-      ],
+      brandName: "Northwind",
+      brandSubtitle: "Punto de Venta",
       items,
+      invoice: {
+        customerName: order.ShipName || `Cliente ${order.CustomerID || "N/A"}`,
+        sellerName,
+        orderCode: `NV-${String(order.OrderID).padStart(5, "0")}`,
+        requestDate: saleDate,
+        shippingAddress,
+        status: order.status || "vendido",
+      },
       totals: [
-        { label: "TOTAL", value: toMoney(total), bold: true },
+        { label: "Subtotal productos", value: toMoney(productSubtotal) },
+        { label: "Costo de envio", value: toMoney(freightCost) },
+        { label: "Descuento", value: toMoney(discountTotal), negative: true },
+        { label: "Total", value: toMoney(finalTotal), bold: true },
       ],
-      footer: [
-        "Gracias por su compra",
-        "Documento generado automaticamente",
-      ],
+      invoiceNotes: "Documento generado despues de confirmar la venta.",
+      footerThanks: "Gracias por su compra y preferencia.",
+      footerCompany: "Northwind Ventas",
     });
 
     res.setHeader("Content-Type", "application/pdf");

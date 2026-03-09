@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import { useParams } from 'react-router-dom'
 import { RESOURCES } from '../config/resources'
@@ -113,33 +113,152 @@ export function ResourceCardsPage() {
   const loadingSkeleton = loading && cards.length === 0
   const isOrdersResource = resource.key === 'orders'
   const isSuppliersResource = resource.key === 'suppliers'
+  const isProductsResource = resource.key === 'products'
+  const [ordersFilter, setOrdersFilter] = useState('all')
+  const [orderDetailsRows, setOrderDetailsRows] = useState([])
+  const [productRows, setProductRows] = useState([])
 
-  const askId = async (title, label) => {
-    const response = await Swal.fire({
-      title,
-      input: 'number',
-      inputLabel: label,
-      showCancelButton: true,
-      confirmButtonText: 'Continuar',
-      cancelButtonText: 'Cancelar',
-      inputValidator: (value) => {
-        if (!value || Number(value) <= 0) {
-          return 'Ingresa un ID valido'
-        }
+  const [supplierRequestOpen, setSupplierRequestOpen] = useState(false)
+  const [requestSupplier, setRequestSupplier] = useState(null)
+  const [requestProducts, setRequestProducts] = useState([])
+  const [requestLines, setRequestLines] = useState([])
+  const [requesterName, setRequesterName] = useState('Compras')
+  const [requesterArea, setRequesterArea] = useState('Area de Compras')
+  const [neededDate, setNeededDate] = useState('')
+  const [requestNotes, setRequestNotes] = useState('')
+  const [requestLoading, setRequestLoading] = useState(false)
 
-        return undefined
-      },
-    })
-
-    if (!response.isConfirmed) {
-      return null
+  useEffect(() => {
+    if (!isOrdersResource) {
+      setOrderDetailsRows([])
+      setProductRows([])
+      setOrdersFilter('all')
+      return
     }
 
-    return Number(response.value)
-  }
+    Promise.all([resourcesApi.list('order-details'), resourcesApi.list('products')])
+      .then(([details, products]) => {
+        setOrderDetailsRows(Array.isArray(details) ? details : [])
+        setProductRows(Array.isArray(products) ? products : [])
+      })
+      .catch(() => {
+        setOrderDetailsRows([])
+        setProductRows([])
+      })
+  }, [isOrdersResource, totalRows])
 
-  const confirmSale = async () => {
-    const orderId = await askId('Confirmar venta', 'ID de pedido')
+  const productStockMap = useMemo(() => {
+    const map = new Map()
+    productRows.forEach((product) => {
+      const stock = Number(product?.stock ?? product?.UnitsInStock ?? 0)
+      map.set(Number(product?.ProductID), Number.isFinite(stock) ? stock : 0)
+    })
+    return map
+  }, [productRows])
+
+  const detailsByOrderMap = useMemo(() => {
+    const map = new Map()
+    orderDetailsRows.forEach((detail) => {
+      const orderId = Number(detail?.OrderID)
+      if (!Number.isInteger(orderId)) {
+        return
+      }
+
+      if (!map.has(orderId)) {
+        map.set(orderId, [])
+      }
+      map.get(orderId).push(detail)
+    })
+    return map
+  }, [orderDetailsRows])
+
+  const orderAvailabilityMap = useMemo(() => {
+    if (!isOrdersResource) {
+      return new Map()
+    }
+
+    const map = new Map()
+    filteredRows.forEach((row) => {
+      const orderId = Number(row?.OrderID)
+      const isSold = String(row?.status || '').toLowerCase() === 'vendido'
+      const details = detailsByOrderMap.get(orderId) || []
+
+      if (isSold) {
+        map.set(orderId, {
+          isSold: true,
+          canConfirm: false,
+          hasShortage: false,
+          shortageCount: 0,
+          hasDetails: details.length > 0,
+        })
+        return
+      }
+
+      if (details.length === 0) {
+        map.set(orderId, {
+          isSold: false,
+          canConfirm: false,
+          hasShortage: false,
+          shortageCount: 0,
+          hasDetails: false,
+        })
+        return
+      }
+
+      const shortageCount = details.reduce((acc, detail) => {
+        const productId = Number(detail?.ProductID)
+        const quantity = Number(detail?.Quantity || 0)
+        const stock = Number(productStockMap.get(productId) || 0)
+        return stock < quantity ? acc + 1 : acc
+      }, 0)
+
+      map.set(orderId, {
+        isSold: false,
+        canConfirm: shortageCount === 0,
+        hasShortage: shortageCount > 0,
+        shortageCount,
+        hasDetails: true,
+      })
+    })
+    return map
+  }, [isOrdersResource, filteredRows, detailsByOrderMap, productStockMap])
+
+  const visibleCards = useMemo(() => {
+    if (!isOrdersResource) {
+      return cards
+    }
+
+    const withAvailability = cards.map((card) => ({
+      ...card,
+      orderAvailability: orderAvailabilityMap.get(Number(card?.row?.OrderID)) || null,
+    }))
+
+    const filtered = withAvailability.filter((card) => {
+      const availability = card.orderAvailability
+      switch (ordersFilter) {
+        case 'ready':
+          return Boolean(availability?.canConfirm)
+        case 'sold':
+          return Boolean(availability?.isSold)
+        case 'shortage':
+          return Boolean(availability?.hasShortage)
+        default:
+          return true
+      }
+    })
+
+    const priority = (availability) => {
+      if (!availability) return 4
+      if (availability.canConfirm) return 1
+      if (availability.isSold) return 2
+      if (availability.hasShortage) return 3
+      return 4
+    }
+
+    return [...filtered].sort((a, b) => priority(a.orderAvailability) - priority(b.orderAvailability))
+  }, [isOrdersResource, cards, orderAvailabilityMap, ordersFilter])
+
+  const confirmSale = async (orderId) => {
     if (!orderId) {
       return
     }
@@ -161,8 +280,7 @@ export function ResourceCardsPage() {
     }
   }
 
-  const downloadSaleNote = async () => {
-    const orderId = await askId('Generar nota de venta (PDF)', 'ID de pedido')
+  const downloadSaleNote = async (orderId) => {
     if (!orderId) {
       return
     }
@@ -178,35 +296,39 @@ export function ResourceCardsPage() {
     }
   }
 
-  const downloadSupplierRequest = async () => {
-    const supplierId = await askId('Solicitud de compra a proveedor (PDF)', 'ID de proveedor')
-    if (!supplierId) {
-      return
-    }
+  const isOrderSold = (row) => String(row?.status || '').toLowerCase() === 'vendido'
 
+  const registerStockOutput = async () => {
     const formResponse = await Swal.fire({
-      title: 'Datos de la solicitud',
+      title: 'Salida de almacen',
       html: `
-        <input id="req-name" class="swal2-input" placeholder="Solicitante" value="Compras" />
-        <input id="req-area" class="swal2-input" placeholder="Area" value="Area de Compras" />
-        <input id="req-date" class="swal2-input" type="date" placeholder="Fecha requerida" />
-        <textarea id="req-notes" class="swal2-textarea" placeholder="Notas para proveedor"></textarea>
+        <input id="stock-product-id" class="swal2-input" type="number" min="1" placeholder="ID de producto" />
+        <input id="stock-qty" class="swal2-input" type="number" min="1" placeholder="Cantidad a retirar" />
+        <input id="stock-reason" class="swal2-input" placeholder="Motivo" value="Salida manual" />
       `,
       showCancelButton: true,
-      confirmButtonText: 'Generar PDF',
+      confirmButtonText: 'Registrar salida',
       cancelButtonText: 'Cancelar',
       preConfirm: () => {
-        const requesterName = document.getElementById('req-name')?.value?.trim()
-        const requesterArea = document.getElementById('req-area')?.value?.trim()
-        const neededDate = document.getElementById('req-date')?.value?.trim()
-        const notes = document.getElementById('req-notes')?.value?.trim()
+        const productId = Number(document.getElementById('stock-product-id')?.value)
+        const quantity = Number(document.getElementById('stock-qty')?.value)
+        const reason = document.getElementById('stock-reason')?.value?.trim()
 
-        if (!requesterName || !requesterArea) {
-          Swal.showValidationMessage('Solicitante y area son obligatorios')
+        if (!Number.isInteger(productId) || productId <= 0) {
+          Swal.showValidationMessage('Ingresa un ID de producto valido')
           return null
         }
 
-        return { requesterName, requesterArea, neededDate, notes }
+        if (!Number.isFinite(quantity) || quantity <= 0) {
+          Swal.showValidationMessage('Ingresa una cantidad valida')
+          return null
+        }
+
+        return {
+          productId,
+          quantity,
+          reason: reason || 'Salida manual',
+        }
       },
     })
 
@@ -215,13 +337,222 @@ export function ResourceCardsPage() {
     }
 
     try {
-      await resourcesApi.downloadSupplierPurchaseRequestPdf(supplierId, formResponse.value)
+      const result = await resourcesApi.registerStockOutput(formResponse.value.productId, {
+        quantity: formResponse.value.quantity,
+        reason: formResponse.value.reason,
+      })
+      await Swal.fire({
+        title: 'Salida registrada',
+        text: `${result.productName}: stock ${result.stockAnterior} -> ${result.stockActual}`,
+        icon: 'success',
+      })
+      await list()
     } catch (error) {
       await Swal.fire({
-        title: 'No se pudo descargar',
+        title: 'No se pudo registrar',
         text: error instanceof Error ? error.message : 'Error inesperado',
         icon: 'error',
       })
+    }
+  }
+
+  const closeSupplierRequestModal = () => {
+    setSupplierRequestOpen(false)
+    setRequestSupplier(null)
+    setRequestProducts([])
+    setRequestLines([])
+    setRequesterName('Compras')
+    setRequesterArea('Area de Compras')
+    setNeededDate('')
+    setRequestNotes('')
+    setRequestLoading(false)
+  }
+
+  const openSupplierRequestModal = async ({ supplierId, initialProductId }) => {
+    const parsedSupplierId = Number(supplierId)
+    if (!Number.isInteger(parsedSupplierId) || parsedSupplierId <= 0) {
+      await Swal.fire({
+        title: 'Proveedor invalido',
+        text: 'El producto no tiene un proveedor valido',
+        icon: 'warning',
+      })
+      return
+    }
+
+    try {
+      const [suppliers, products] = await Promise.all([
+        resourcesApi.list('suppliers'),
+        resourcesApi.list('products'),
+      ])
+
+      const supplier = Array.isArray(suppliers)
+        ? suppliers.find((item) => Number(item.SupplierID) === parsedSupplierId)
+        : null
+
+      if (!supplier) {
+        await Swal.fire({
+          title: 'Proveedor no encontrado',
+          text: `No existe el proveedor ${parsedSupplierId}`,
+          icon: 'error',
+        })
+        return
+      }
+
+      const supplierProducts = (Array.isArray(products) ? products : [])
+        .filter((item) => Number(item.SupplierID) === parsedSupplierId)
+        .filter((item) => Number(item.Discontinued || 0) !== 1)
+
+      if (supplierProducts.length === 0) {
+        await Swal.fire({
+          title: 'Sin productos disponibles',
+          text: 'Este proveedor no tiene productos activos para solicitar',
+          icon: 'warning',
+        })
+        return
+      }
+
+      const preferredProduct = supplierProducts.find(
+        (item) => Number(item.ProductID) === Number(initialProductId)
+      )
+
+      setRequestSupplier(supplier)
+      setRequestProducts(supplierProducts)
+      setRequestLines([
+        {
+          productId: String(preferredProduct?.ProductID || supplierProducts[0].ProductID),
+          quantity: '1',
+          description: '',
+        },
+      ])
+      setSupplierRequestOpen(true)
+    } catch (error) {
+      await Swal.fire({
+        title: 'No se pudo preparar la solicitud',
+        text: error instanceof Error ? error.message : 'Error inesperado',
+        icon: 'error',
+      })
+    }
+  }
+
+  const openSupplierPickerRequest = async () => {
+    let supplierRows = filteredRows
+
+    if (!Array.isArray(supplierRows) || supplierRows.length === 0) {
+      supplierRows = await resourcesApi.list('suppliers')
+    }
+
+    const options = Object.fromEntries(
+      (Array.isArray(supplierRows) ? supplierRows : []).map((supplier) => [
+        String(supplier.SupplierID),
+        `${supplier.SupplierID} - ${supplier.CompanyName}`,
+      ])
+    )
+
+    const selection = await Swal.fire({
+      title: 'Selecciona proveedor',
+      input: 'select',
+      inputOptions: options,
+      inputPlaceholder: 'Elige un proveedor',
+      showCancelButton: true,
+      confirmButtonText: 'Continuar',
+      cancelButtonText: 'Cancelar',
+      inputValidator: (value) => {
+        if (!value) {
+          return 'Selecciona un proveedor'
+        }
+        return undefined
+      },
+    })
+
+    if (!selection.isConfirmed || !selection.value) {
+      return
+    }
+
+    await openSupplierRequestModal({ supplierId: Number(selection.value) })
+  }
+
+  const addRequestLine = () => {
+    if (requestProducts.length === 0) {
+      return
+    }
+
+    setRequestLines((prev) => [
+      ...prev,
+      {
+        productId: String(requestProducts[0].ProductID),
+        quantity: '1',
+        description: '',
+      },
+    ])
+  }
+
+  const updateRequestLine = (index, field, value) => {
+    setRequestLines((prev) =>
+      prev.map((line, lineIndex) =>
+        lineIndex === index
+          ? {
+              ...line,
+              [field]: value,
+            }
+          : line
+      )
+    )
+  }
+
+  const removeRequestLine = (index) => {
+    setRequestLines((prev) => prev.filter((_, lineIndex) => lineIndex !== index))
+  }
+
+  const submitSupplierRequest = async () => {
+    if (!requestSupplier?.SupplierID) {
+      return
+    }
+
+    if (!requesterName.trim() || !requesterArea.trim()) {
+      await Swal.fire({
+        title: 'Datos incompletos',
+        text: 'Solicitante y area son obligatorios',
+        icon: 'warning',
+      })
+      return
+    }
+
+    const normalizedItems = requestLines
+      .map((line) => ({
+        productId: Number(line.productId),
+        quantity: Number(line.quantity),
+        description: String(line.description || '').trim(),
+      }))
+      .filter((line) => Number.isInteger(line.productId) && line.productId > 0)
+      .filter((line) => Number.isFinite(line.quantity) && line.quantity > 0)
+
+    if (normalizedItems.length === 0) {
+      await Swal.fire({
+        title: 'Sin productos validos',
+        text: 'Agrega al menos un producto con cantidad mayor a 0',
+        icon: 'warning',
+      })
+      return
+    }
+
+    setRequestLoading(true)
+    try {
+      await resourcesApi.downloadSupplierPurchaseRequestPdf(requestSupplier.SupplierID, {
+        requesterName: requesterName.trim(),
+        requesterArea: requesterArea.trim(),
+        neededDate: neededDate.trim(),
+        notes: requestNotes.trim(),
+        items: normalizedItems,
+      })
+      closeSupplierRequestModal()
+    } catch (error) {
+      await Swal.fire({
+        title: 'No se pudo generar solicitud',
+        text: error instanceof Error ? error.message : 'Error inesperado',
+        icon: 'error',
+      })
+    } finally {
+      setRequestLoading(false)
     }
   }
 
@@ -322,21 +653,26 @@ export function ResourceCardsPage() {
           </button>
 
           {isOrdersResource ? (
-            <button className="btn btn-secondary" onClick={confirmSale}>
-              <Truck size={16} />
-              Confirmar venta
-            </button>
+            <label className="control-inline">
+              Estado pedido
+              <select value={ordersFilter} onChange={(event) => setOrdersFilter(event.target.value)}>
+                <option value="all">Todos</option>
+                <option value="ready">Aceptables (con stock)</option>
+                <option value="sold">Ya aceptadas</option>
+                <option value="shortage">Sin stock suficiente</option>
+              </select>
+            </label>
           ) : null}
 
-          {isOrdersResource ? (
-            <button className="btn btn-secondary" onClick={downloadSaleNote}>
-              <FileDown size={16} />
-              Generar nota venta (PDF)
+          {isProductsResource ? (
+            <button className="btn btn-secondary" onClick={registerStockOutput}>
+              <Truck size={16} />
+              Salida almacen
             </button>
           ) : null}
 
           {isSuppliersResource ? (
-            <button className="btn btn-secondary" onClick={downloadSupplierRequest}>
+            <button className="btn btn-secondary" onClick={openSupplierPickerRequest}>
               <FileDown size={16} />
               Solicitud compra (PDF)
             </button>
@@ -357,8 +693,22 @@ export function ResourceCardsPage() {
           : null}
 
         {!loadingSkeleton
-          ? cards.map((card) => (
-              <article key={card.id} className="data-card">
+          ? visibleCards.map((card) => {
+              const availability = card.orderAvailability
+              const cardClassName = isOrdersResource
+                ? `data-card ${
+                    availability?.isSold
+                      ? 'order-card-sold'
+                      : availability?.canConfirm
+                        ? 'order-card-ready'
+                        : availability?.hasShortage
+                          ? 'order-card-shortage'
+                          : 'order-card-pending'
+                  }`
+                : 'data-card'
+
+              return (
+              <article key={card.id} className={cardClassName}>
                 <div className="data-card-header">
                   <h3>{String(card.row[card.titleField] ?? 'Sin titulo')}</h3>
                   <div className="card-actions">
@@ -386,11 +736,80 @@ export function ResourceCardsPage() {
                     </div>
                   ))}
                 </div>
+
+                {isProductsResource ? (
+                  <button
+                    className="btn btn-secondary card-inline-action"
+                    onClick={() =>
+                      openSupplierRequestModal({
+                        supplierId: Number(card.row.SupplierID),
+                        initialProductId: Number(card.row.ProductID),
+                      })
+                    }
+                  >
+                    <FileDown size={15} />
+                    Solicitar a proveedor
+                  </button>
+                ) : null}
+
+                {isSuppliersResource ? (
+                  <button
+                    className="btn btn-secondary card-inline-action"
+                    onClick={() =>
+                      openSupplierRequestModal({
+                        supplierId: Number(card.row.SupplierID),
+                      })
+                    }
+                  >
+                    <FileDown size={15} />
+                    Solicitar productos
+                  </button>
+                ) : null}
+
+                {isOrdersResource ? (
+                  <>
+                    <p className="order-status-badge">
+                      {availability?.isSold
+                        ? 'Aceptada (vendida)'
+                        : availability?.canConfirm
+                          ? 'Lista para aceptar'
+                          : availability?.hasShortage
+                            ? `Sin stock suficiente (${availability.shortageCount})`
+                            : 'Sin detalle de pedido'}
+                    </p>
+                    <button
+                      className="btn btn-secondary card-inline-action"
+                      onClick={() => confirmSale(Number(card.row.OrderID))}
+                      disabled={isOrderSold(card.row) || Boolean(availability?.hasShortage) || !availability?.hasDetails}
+                      title={
+                        isOrderSold(card.row)
+                          ? 'La venta ya fue confirmada'
+                          : availability?.hasShortage
+                            ? 'No hay stock suficiente para confirmar'
+                            : !availability?.hasDetails
+                              ? 'El pedido no tiene detalle'
+                              : 'Confirmar venta'
+                      }
+                    >
+                      <Truck size={15} />
+                      {isOrderSold(card.row) ? 'Venta confirmada' : 'Confirmar venta'}
+                    </button>
+                    <button
+                      className="btn btn-secondary card-inline-action"
+                      onClick={() => downloadSaleNote(Number(card.row.OrderID))}
+                      disabled={!isOrderSold(card.row)}
+                      title={isOrderSold(card.row) ? 'Generar nota de venta' : 'Debes confirmar la venta primero'}
+                    >
+                      <FileDown size={15} />
+                      Generar nota venta (PDF)
+                    </button>
+                  </>
+                ) : null}
               </article>
-            ))
+            )})
           : null}
 
-        {!loadingSkeleton && cards.length === 0 ? (
+        {!loadingSkeleton && visibleCards.length === 0 ? (
           <article className="empty-card">
             <p>No hay resultados para mostrar.</p>
             <button className="btn btn-success" onClick={openCreateForm}>
@@ -519,6 +938,121 @@ export function ResourceCardsPage() {
               <button className="btn btn-primary" onClick={submitForm} disabled={loading}>
                 <Save size={15} />
                 Guardar
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {supplierRequestOpen ? (
+        <section className="modal-backdrop">
+          <div className="modal-card request-modal">
+            <div className="modal-head">
+              <h3>
+                Solicitud a proveedor: {requestSupplier?.CompanyName || 'N/A'}
+              </h3>
+              <button className="icon-btn" onClick={closeSupplierRequestModal}>
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="form-grid request-meta-grid">
+              <label>
+                Solicitante
+                <input
+                  value={requesterName}
+                  onChange={(event) => setRequesterName(event.target.value)}
+                  placeholder="Nombre de quien solicita"
+                />
+              </label>
+              <label>
+                Area
+                <input
+                  value={requesterArea}
+                  onChange={(event) => setRequesterArea(event.target.value)}
+                  placeholder="Area solicitante"
+                />
+              </label>
+              <label>
+                Fecha requerida
+                <input
+                  type="date"
+                  value={neededDate}
+                  onChange={(event) => setNeededDate(event.target.value)}
+                />
+              </label>
+            </div>
+
+            <label className="request-notes">
+              Descripcion general
+              <textarea
+                value={requestNotes}
+                onChange={(event) => setRequestNotes(event.target.value)}
+                placeholder="Describe lo que se necesita en general"
+              />
+            </label>
+
+            <div className="request-lines-head">
+              <h4>Productos solicitados</h4>
+              <button className="btn btn-success" onClick={addRequestLine}>
+                <Plus size={14} />
+                Agregar producto
+              </button>
+            </div>
+
+            <div className="request-lines-grid">
+              {requestLines.map((line, index) => (
+                <article key={`request-line-${index}`} className="request-line-card">
+                  <label>
+                    Producto
+                    <select
+                      value={line.productId}
+                      onChange={(event) => updateRequestLine(index, 'productId', event.target.value)}
+                    >
+                      {requestProducts.map((product) => (
+                        <option key={`request-product-${product.ProductID}`} value={String(product.ProductID)}>
+                          {product.ProductID} - {product.ProductName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Cantidad
+                    <input
+                      type="number"
+                      min="1"
+                      value={line.quantity}
+                      onChange={(event) => updateRequestLine(index, 'quantity', event.target.value)}
+                    />
+                  </label>
+                  <label>
+                    Descripcion
+                    <input
+                      value={line.description}
+                      onChange={(event) => updateRequestLine(index, 'description', event.target.value)}
+                      placeholder="Detalle adicional para este producto"
+                    />
+                  </label>
+                  <button
+                    className="btn btn-danger"
+                    onClick={() => removeRequestLine(index)}
+                    disabled={requestLines.length === 1}
+                  >
+                    <Trash2 size={14} />
+                    Quitar
+                  </button>
+                </article>
+              ))}
+            </div>
+
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={closeSupplierRequestModal}>
+                <X size={15} />
+                Cancelar
+              </button>
+              <button className="btn btn-primary" onClick={submitSupplierRequest} disabled={requestLoading}>
+                <FileDown size={15} />
+                Generar PDF
               </button>
             </div>
           </div>

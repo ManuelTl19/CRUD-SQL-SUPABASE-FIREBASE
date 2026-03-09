@@ -60,6 +60,13 @@ export const resourcesApi = {
     })
   },
 
+  registerStockOutput(productId, payload) {
+    return request(`/api/products/${productId}/stock-output`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    })
+  },
+
   downloadSaleNotePdf(orderId) {
     return downloadPdf(`/api/orders/${orderId}/sale-note-pdf`, `nota-venta-${orderId}.pdf`)
   },

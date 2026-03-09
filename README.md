@@ -260,15 +260,46 @@ Reglas aplicadas:
 Endpoints nuevos:
 
 - `GET /api/products/low-stock`
+- `POST /api/products/:id/stock-output`
 - `POST /api/orders/:id/confirm-sale`
 - `GET /api/orders/:id/sale-note-pdf`
 - `GET /api/suppliers/:id/purchase-request-pdf`
+- `POST /api/suppliers/:id/purchase-request-pdf`
 
 Interfaz:
 
 - En `Pedidos`: botones `Confirmar venta` y `Generar nota venta (PDF)`.
-- En `Proveedores`: boton `Solicitud compra (PDF)`.
-- En `Productos`: campos `stock` e `isLowStock` visibles/editables.
+- En `Proveedores`: boton `Solicitud compra (PDF)` + solicitud por tarjeta con picker.
+- En `Productos`: campos `stock` e `isLowStock` visibles/editables + boton `Salida almacen` + boton por tarjeta `Solicitar a proveedor`.
+
+## 17) Cumplimiento del objetivo del proyecto
+
+Objetivo solicitado:
+
+> Desarrollar aplicaciones web utilizando MySQL que integre acciones CRUD y acciones de gestion para inventario (salida de almacen), pedidos, ventas; generando archivos PDF para notas de venta y solicitud de compra a proveedores.
+
+Matriz de cumplimiento:
+
+- CRUD web + MySQL:
+  - API REST CRUD para recursos Northwind (`/api/categories`, `/api/products`, `/api/orders`, etc.).
+  - Frontend React con alta, edicion, eliminacion y consulta.
+- Inventario (salida de almacen):
+  - `POST /api/products/:id/stock-output` descuenta stock con validacion y actualiza `isLowStock`.
+  - `GET /api/products/low-stock` para monitoreo de reposicion.
+- Pedidos y ventas:
+  - `POST /api/orders/:id/confirm-sale` confirma venta, marca pedido como `vendido` y descuenta stock por `order_details`.
+  - `GET /api/orders/:id/sale-note-pdf` genera nota de venta PDF.
+- Solicitud de compra a proveedores (PDF):
+  - `POST /api/suppliers/:id/purchase-request-pdf` genera PDF de solicitud con multiples productos, cantidad y descripcion.
+  - Flujo disponible desde vista `products` y `suppliers`.
+
+Checklist de demo final (aceptacion):
+
+1. CRUD: crear/editar/eliminar un producto y verificar en listado.
+2. Salida de almacen: ejecutar `Salida almacen` y comprobar reduccion de stock.
+3. Venta: confirmar un pedido y verificar cambio de estado + descuento de inventario.
+4. PDF de venta: descargar `nota-venta-<OrderID>.pdf`.
+5. PDF proveedor: generar solicitud con 2 productos del mismo proveedor y descargar PDF.
 
 ## 16) Troubleshooting
 

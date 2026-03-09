@@ -111,3 +111,78 @@ exports.remove = async (req, res) => {
     sendDbError(res, error);
   }
 };
+
+// POST /products/:id/stock-output
+exports.stockOutput = async (req, res) => {
+  const productId = Number(req.params.id);
+  const quantity = Number(req.body?.quantity);
+  const reason = String(req.body?.reason || "Salida manual").trim() || "Salida manual";
+
+  if (!Number.isInteger(productId) || productId <= 0) {
+    return res.status(400).json({ message: "ID de producto invalido" });
+  }
+
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return res.status(400).json({ message: "Cantidad invalida" });
+  }
+
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [rows] = await connection.query(
+      `SELECT ProductID, ProductName,
+              COALESCE(stock, UnitsInStock, 0) AS stock,
+              COALESCE(UnitsInStock, 0) AS UnitsInStock
+       FROM products
+       WHERE ProductID = ?
+       FOR UPDATE`,
+      [productId]
+    );
+
+    if (rows.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+
+    const product = rows[0];
+    const currentStock = Number(product.stock || 0);
+    if (currentStock < quantity) {
+      await connection.rollback();
+      return res.status(409).json({
+        message: "No hay stock suficiente para salida de almacen",
+        productId,
+        productName: product.ProductName,
+        stockActual: currentStock,
+        requested: quantity,
+      });
+    }
+
+    const nextStock = currentStock - quantity;
+    const nextUnitsInStock = Math.max(Number(product.UnitsInStock || 0) - quantity, 0);
+
+    await connection.query(
+      `UPDATE products
+       SET stock = ?, UnitsInStock = ?, isLowStock = ?
+       WHERE ProductID = ?`,
+      [nextStock, nextUnitsInStock, nextStock < 10 ? 1 : 0, productId]
+    );
+
+    await connection.commit();
+    return res.json({
+      message: "Salida de almacen registrada",
+      productId,
+      productName: product.ProductName,
+      quantity,
+      reason,
+      stockAnterior: currentStock,
+      stockActual: nextStock,
+    });
+  } catch (error) {
+    await connection.rollback();
+    return sendDbError(res, error);
+  } finally {
+    connection.release();
+  }
+};

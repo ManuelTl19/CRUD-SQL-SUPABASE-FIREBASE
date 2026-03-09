@@ -580,6 +580,43 @@ tbody tr:hover {
   color: #0f172a;
 }
 
+.card-inline-action {
+  margin-top: 12px;
+  width: 100%;
+  justify-content: center;
+}
+
+.order-card-ready {
+  border-color: #86efac;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 45%);
+}
+
+.order-card-shortage {
+  border-color: #fca5a5;
+  background: linear-gradient(180deg, #fef2f2 0%, #ffffff 45%);
+}
+
+.order-card-sold {
+  border-color: #67e8f9;
+  background: linear-gradient(180deg, #ecfeff 0%, #ffffff 45%);
+}
+
+.order-card-pending {
+  border-color: #cbd5e1;
+  background: linear-gradient(180deg, #f8fafc 0%, #ffffff 45%);
+}
+
+.order-status-badge {
+  margin: 10px 0 0;
+  padding: 6px 9px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px dashed #cbd5e1;
+}
+
 .card-actions {
   display: flex;
   gap: 6px;
@@ -708,6 +745,52 @@ tbody tr:hover {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.request-modal {
+  width: min(1000px, 100%);
+}
+
+.request-meta-grid {
+  margin-bottom: 12px;
+}
+
+.request-notes {
+  margin-bottom: 14px;
+}
+
+.request-lines-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.request-lines-head h4 {
+  margin: 0;
+}
+
+.request-lines-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.request-line-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns: 1.5fr 0.6fr 1.2fr auto;
+  gap: 10px;
+  align-items: end;
+  background: #f8fafc;
+}
+
+@media (max-width: 920px) {
+  .request-line-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 980px) {
