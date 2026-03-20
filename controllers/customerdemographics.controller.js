@@ -1,3 +1,4 @@
+// Controlador: coordina la logica del recurso, acceso a datos y respuestas HTTP.
 const db = require("../config/db");
 const customerDemographicsModel = require("../modelos/customerdemographics.model");
 const { sendDbError } = require("./_dbErrors");

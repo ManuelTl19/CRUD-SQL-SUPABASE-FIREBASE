@@ -1,3 +1,4 @@
+// Controlador: coordina la logica del recurso, acceso a datos y respuestas HTTP.
 const db = require("../config/db");
 const suppliersModel = require("../modelos/suppliers.model");
 const { sendDbError } = require("./_dbErrors");
@@ -7,6 +8,14 @@ function toMoney(value) {
   const amount = Number(value || 0);
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
 }
+
+// Flujo general del controlador Suppliers:
+// 1) Recibe req/res desde la ruta.
+// 2) Valida parametros y/o body segun la operacion.
+// 3) Para CREATE/UPDATE usa suppliersModel como lista blanca de campos permitidos.
+// 4) Ejecuta SQL parametrizado con db.query para evitar inyeccion.
+// 5) Devuelve respuesta HTTP (200/201/404/400/409/500).
+// 6) Ante errores SQL delega en sendDbError para un manejo uniforme.
 
 // Obtener todos
 exports.getAll = async (req, res) => {
@@ -37,6 +46,7 @@ exports.getById = async (req, res) => {
 // Crear
 exports.create = async (req, res) => {
   try {
+    // CREATE: filtra el body antes de insertar para no persistir campos inesperados.
     const payload = suppliersModel.createData(req.body);
     const [result] = await db.query(
       "INSERT INTO suppliers SET ?",
@@ -53,6 +63,7 @@ exports.create = async (req, res) => {
 // Actualizar
 exports.update = async (req, res) => {
   try {
+    // UPDATE: misma lista blanca del modelo para mantener consistencia de datos.
     const payload = suppliersModel.updateData(req.body);
     const [result] = await db.query(
       "UPDATE suppliers SET ? WHERE SupplierID = ?",
@@ -85,6 +96,12 @@ exports.remove = async (req, res) => {
 
 // GET /suppliers/:id/purchase-request-pdf
 exports.getPurchaseRequestPdf = async (req, res) => {
+  // Flujo PDF de compra:
+  // A) Validar SupplierID.
+  // B) Confirmar que el proveedor exista.
+  // C) Obtener productos: personalizados (body.items) o automaticos (stock bajo).
+  // D) Armar detalle de lineas y total estimado.
+  // E) Generar PDF y devolverlo como attachment.
   const supplierId = Number(req.params.id);
 
   if (!Number.isInteger(supplierId) || supplierId <= 0) {
@@ -113,6 +130,7 @@ exports.getPurchaseRequestPdf = async (req, res) => {
     let normalizedRequestItems = [];
 
     if (requestItems.length > 0) {
+      // Caso manual: el cliente define productos/cantidades en el body.
       normalizedRequestItems = requestItems
         .map((entry) => ({
           productId: Number(entry?.productId),
@@ -148,6 +166,7 @@ exports.getPurchaseRequestPdf = async (req, res) => {
 
       sourceProducts = rows;
     } else {
+      // Caso automatico: se proponen productos con stock bajo del proveedor.
       const [products] = await db.query(
         `SELECT ProductID, ProductName, COALESCE(stock, UnitsInStock, 0) AS stock,
                 COALESCE(ReorderLevel, 10) AS ReorderLevel,
@@ -236,6 +255,7 @@ exports.getPurchaseRequestPdf = async (req, res) => {
       "Content-Disposition",
       `attachment; filename=solicitud-compra-proveedor-${supplierId}.pdf`
     );
+    // Respuesta binaria del PDF para descarga directa desde navegador/cliente.
     return res.send(pdfBuffer);
   } catch (error) {
     return sendDbError(res, error);

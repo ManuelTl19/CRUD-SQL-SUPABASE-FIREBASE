@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 export function IdInputs({ idKeys, idValues, onChange }) {
   return (
     <div className="id-grid">

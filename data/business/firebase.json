@@ -61,6 +61,16 @@
         "createdAt": "2026-03-06T01:31:26.030Z",
         "sourceDb": "firebase"
       }
+    ],
+    "categories": [
+      {
+        "CategoryID": 1,
+        "CategoryName": "nose",
+        "Description": "nose",
+        "id": "1",
+        "sourceDb": "firebase",
+        "updatedAt": "2026-03-09T23:35:56.415Z"
+      }
     ]
   }
 }

@@ -1,3 +1,4 @@
+// Configuracion del entorno frontend (build, lint o herramientas de desarrollo).
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 

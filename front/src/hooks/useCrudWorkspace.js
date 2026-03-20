@@ -1,3 +1,4 @@
+// Hook personalizado: encapsula estado y comportamiento reutilizable de la UI.
 import { useEffect, useMemo, useState } from 'react'
 import { RESOURCES } from '../config/resources'
 import { resourcesApi } from '../services/resourcesApi'

@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { prettifyJson } from '../../utils/format'
 import { Panel } from '../common/Panel'
 import { TerminalSquare } from 'lucide-react'

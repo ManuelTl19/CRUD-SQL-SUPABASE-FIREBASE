@@ -1,3 +1,4 @@
+// Modelo de payload: centraliza campos permitidos para operaciones create/update.
 const hasValue = (value) => {
   if (value === undefined || value === null) {
     return false;

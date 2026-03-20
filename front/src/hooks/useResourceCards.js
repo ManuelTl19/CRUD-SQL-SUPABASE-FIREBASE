@@ -1,3 +1,4 @@
+// Hook personalizado: encapsula estado y comportamiento reutilizable de la UI.
 import { useEffect, useMemo, useState } from 'react'
 import Swal from 'sweetalert2'
 import { resourcesApi } from '../services/resourcesApi'

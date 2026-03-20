@@ -1,3 +1,4 @@
+// Modulo del frontend: participa en el ciclo principal de la aplicacion React.
 import { API_BASE_URL } from './config/env'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RESOURCES } from './config/resources'

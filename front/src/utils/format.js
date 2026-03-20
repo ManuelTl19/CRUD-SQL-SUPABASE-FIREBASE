@@ -1,3 +1,4 @@
+// Utilidad: funciones puras de apoyo para formato y transformaciones comunes.
 export const isPlainObject = (value) =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 

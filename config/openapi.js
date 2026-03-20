@@ -1,3 +1,4 @@
+// Configuracion de infraestructura para la API (DB, OpenAPI, registro y bootstrap).
 const resources = [
   { tag: "Categories", basePath: "/api/categories", idName: "id", kind: "single" },
   { tag: "Suppliers", basePath: "/api/suppliers", idName: "id", kind: "single" },
@@ -20,12 +21,14 @@ const resources = [
     basePath: "/api/customer-customer-demo",
     kind: "composite",
     keys: ["customerId", "customerTypeId"],
+    allowPut: false,
   },
   {
     tag: "EmployeeTerritories",
     basePath: "/api/employee-territories",
     kind: "composite",
     keys: ["employeeId", "territoryId"],
+    allowPut: false,
   },
 ];
 
@@ -125,7 +128,7 @@ const buildSingleResourcePaths = (resource) => {
 };
 
 const buildCompositeResourcePaths = (resource) => {
-  const { basePath, tag, keys } = resource;
+  const { basePath, tag, keys, allowPut = true } = resource;
   const compositePath = `${basePath}/{${keys[0]}}/{${keys[1]}}`;
 
   const commonParameters = keys.map((key) => ({
@@ -134,6 +137,50 @@ const buildCompositeResourcePaths = (resource) => {
     required: true,
     schema: { type: "string" },
   }));
+
+  const byCompositeIdPath = {
+    get: {
+      tags: [tag],
+      summary: `Obtener ${tag} por ID compuesto`,
+      parameters: commonParameters,
+      responses: {
+        200: { description: "OK" },
+        404: { description: "No encontrado" },
+        500: { description: "Error interno" },
+      },
+    },
+    delete: {
+      tags: [tag],
+      summary: `Eliminar ${tag} por ID compuesto`,
+      parameters: commonParameters,
+      responses: {
+        200: { description: "Eliminado" },
+        404: { description: "No encontrado" },
+        500: { description: "Error interno" },
+      },
+    },
+  };
+
+  if (allowPut) {
+    byCompositeIdPath.put = {
+      tags: [tag],
+      summary: `Actualizar ${tag} por ID compuesto`,
+      parameters: commonParameters,
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { type: "object", additionalProperties: true },
+          },
+        },
+      },
+      responses: {
+        200: { description: "Actualizado" },
+        404: { description: "No encontrado" },
+        500: { description: "Error interno" },
+      },
+    };
+  }
 
   return {
     [basePath]: {
@@ -163,46 +210,7 @@ const buildCompositeResourcePaths = (resource) => {
         },
       },
     },
-    [compositePath]: {
-      get: {
-        tags: [tag],
-        summary: `Obtener ${tag} por ID compuesto`,
-        parameters: commonParameters,
-        responses: {
-          200: { description: "OK" },
-          404: { description: "No encontrado" },
-          500: { description: "Error interno" },
-        },
-      },
-      put: {
-        tags: [tag],
-        summary: `Actualizar ${tag} por ID compuesto`,
-        parameters: commonParameters,
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: { type: "object", additionalProperties: true },
-            },
-          },
-        },
-        responses: {
-          200: { description: "Actualizado" },
-          404: { description: "No encontrado" },
-          500: { description: "Error interno" },
-        },
-      },
-      delete: {
-        tags: [tag],
-        summary: `Eliminar ${tag} por ID compuesto`,
-        parameters: commonParameters,
-        responses: {
-          200: { description: "Eliminado" },
-          404: { description: "No encontrado" },
-          500: { description: "Error interno" },
-        },
-      },
-    },
+    [compositePath]: byCompositeIdPath,
   };
 };
 
@@ -670,6 +678,185 @@ const detailedPaths = {
       },
     },
   },
+  "/api/products/low-stock": {
+    get: {
+      tags: ["Products"],
+      summary: "Listar productos con stock bajo",
+      responses: {
+        200: {
+          description: "OK",
+          content: {
+            "application/json": {
+              schema: {
+                type: "array",
+                items: { $ref: "#/components/schemas/LowStockProduct" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+  "/api/products/{id}/stock-output": {
+    post: {
+      tags: ["Products"],
+      summary: "Registrar salida de almacen",
+      parameters: [
+        {
+          in: "path",
+          name: "id",
+          required: true,
+          schema: { type: "integer" },
+        },
+      ],
+      requestBody: {
+        required: true,
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/StockOutputInput" },
+            example: {
+              quantity: 5,
+              reason: "Salida por venta mostrador",
+            },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Salida registrada",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/StockOutputResponse" },
+            },
+          },
+        },
+        400: { description: "Datos invalidos" },
+        404: { description: "Producto no encontrado" },
+        409: { description: "Stock insuficiente" },
+      },
+    },
+  },
+  "/api/orders/{id}/confirm-sale": {
+    post: {
+      tags: ["Orders"],
+      summary: "Confirmar venta de pedido",
+      parameters: [
+        {
+          in: "path",
+          name: "id",
+          required: true,
+          schema: { type: "integer" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Venta confirmada o ya vendida",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/MessageResponse" },
+            },
+          },
+        },
+        400: { description: "Pedido sin detalles o ID invalido" },
+        404: { description: "Orden no encontrada" },
+        409: { description: "Stock insuficiente" },
+      },
+    },
+  },
+  "/api/orders/{id}/sale-note-pdf": {
+    get: {
+      tags: ["Orders"],
+      summary: "Generar nota de venta PDF",
+      parameters: [
+        {
+          in: "path",
+          name: "id",
+          required: true,
+          schema: { type: "integer" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Archivo PDF",
+          content: {
+            "application/pdf": {
+              schema: {
+                type: "string",
+                format: "binary",
+              },
+            },
+          },
+        },
+        400: { description: "ID invalido" },
+        404: { description: "Orden no encontrada" },
+        409: { description: "Venta no confirmada" },
+      },
+    },
+  },
+  "/api/suppliers/{id}/purchase-request-pdf": {
+    get: {
+      tags: ["Suppliers"],
+      summary: "Generar solicitud de compra PDF (automatico por stock bajo)",
+      parameters: [
+        {
+          in: "path",
+          name: "id",
+          required: true,
+          schema: { type: "integer" },
+        },
+      ],
+      responses: {
+        200: {
+          description: "Archivo PDF",
+          content: {
+            "application/pdf": {
+              schema: {
+                type: "string",
+                format: "binary",
+              },
+            },
+          },
+        },
+        400: { description: "ID invalido" },
+        404: { description: "Proveedor no encontrado" },
+      },
+    },
+    post: {
+      tags: ["Suppliers"],
+      summary: "Generar solicitud de compra PDF personalizada",
+      parameters: [
+        {
+          in: "path",
+          name: "id",
+          required: true,
+          schema: { type: "integer" },
+        },
+      ],
+      requestBody: {
+        required: false,
+        content: {
+          "application/json": {
+            schema: { $ref: "#/components/schemas/PurchaseRequestInput" },
+          },
+        },
+      },
+      responses: {
+        200: {
+          description: "Archivo PDF",
+          content: {
+            "application/pdf": {
+              schema: {
+                type: "string",
+                format: "binary",
+              },
+            },
+          },
+        },
+        400: { description: "Datos invalidos" },
+        404: { description: "Proveedor no encontrado" },
+      },
+    },
+  },
 };
 
 const paths = {
@@ -778,6 +965,58 @@ const components = {
       },
       required: ["OrderID", "ProductID", "UnitPrice", "Quantity", "Discount"],
     },
+    LowStockProduct: {
+      type: "object",
+      properties: {
+        ProductID: { type: "integer" },
+        ProductName: { type: "string" },
+        SupplierID: { type: "integer", nullable: true },
+        stock: { type: "integer" },
+        ReorderLevel: { type: "integer" },
+        isLowStock: { type: "integer", enum: [0, 1] },
+      },
+    },
+    StockOutputInput: {
+      type: "object",
+      properties: {
+        quantity: { type: "number", minimum: 0.01 },
+        reason: { type: "string" },
+      },
+      required: ["quantity"],
+    },
+    StockOutputResponse: {
+      type: "object",
+      properties: {
+        message: { type: "string" },
+        productId: { type: "integer" },
+        productName: { type: "string" },
+        quantity: { type: "number" },
+        reason: { type: "string" },
+        stockAnterior: { type: "number" },
+        stockActual: { type: "number" },
+      },
+    },
+    PurchaseRequestInput: {
+      type: "object",
+      properties: {
+        requesterName: { type: "string" },
+        requesterArea: { type: "string" },
+        neededDate: { type: "string" },
+        notes: { type: "string" },
+        items: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              productId: { type: "integer" },
+              quantity: { type: "number" },
+              description: { type: "string" },
+            },
+            required: ["productId", "quantity"],
+          },
+        },
+      },
+    },
   },
 };
 
@@ -786,7 +1025,7 @@ const openApiSpec = {
   info: {
     title: "Northwind API",
     version: "1.0.0",
-    description: "Documentación Swagger de la API CRUD Northwind.",
+    description: "Documentación Swagger de la API CRUD Northwind con inventario, ventas y generación de PDFs.",
   },
   servers: [{ url: "http://localhost:3000", description: "Local" }],
   tags: [

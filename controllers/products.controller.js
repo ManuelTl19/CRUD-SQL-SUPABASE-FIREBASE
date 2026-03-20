@@ -1,8 +1,9 @@
+// Controlador: coordina la logica del recurso, acceso a datos y respuestas HTTP.
 const db = require("../config/db");
 const productsModel = require("../modelos/products.model");
 const { sendDbError } = require("./_dbErrors");
 
-// Obtener todos
+// Lista completa con campos derivados para estado de stock.
 exports.getAll = async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -33,7 +34,7 @@ exports.getLowStock = async (req, res) => {
   }
 };
 
-// Obtener por ID
+// Lectura puntual por clave primaria.
 exports.getById = async (req, res) => {
   try {
     const [rows] = await db.query(
@@ -49,13 +50,15 @@ exports.getById = async (req, res) => {
   }
 };
 
-// Crear
+// Alta de producto con payload filtrado por modelo y reglas de inventario.
 exports.create = async (req, res) => {
   try {
     const payload = productsModel.createData(req.body);
+    // Si no llega stock explicito, se sincroniza con UnitsInStock.
     if (payload.stock === undefined || payload.stock === null || payload.stock === "") {
       payload.stock = Number(payload.UnitsInStock || 0);
     }
+    // Bandera de bajo stock calculada en backend para consistencia.
     payload.isLowStock = Number(payload.stock || 0) < 10 ? 1 : 0;
 
     const [result] = await db.query(
@@ -70,15 +73,17 @@ exports.create = async (req, res) => {
   }
 };
 
-// Actualizar
+// Actualizacion parcial por ID respetando campos permitidos.
 exports.update = async (req, res) => {
   try {
     const payload = productsModel.updateData(req.body);
 
+    // Compatibilidad: si solo se actualiza UnitsInStock, reflejar en stock.
     if (payload.stock === undefined && payload.UnitsInStock !== undefined) {
       payload.stock = Number(payload.UnitsInStock || 0);
     }
 
+    // Recalculo de indicador de bajo stock cuando cambia el inventario.
     if (payload.stock !== undefined) {
       payload.isLowStock = Number(payload.stock || 0) < 10 ? 1 : 0;
     }
@@ -96,7 +101,7 @@ exports.update = async (req, res) => {
   }
 };
 
-// Eliminar
+// Eliminacion fisica por ID.
 exports.remove = async (req, res) => {
   try {
     const [result] = await db.query(
@@ -112,7 +117,7 @@ exports.remove = async (req, res) => {
   }
 };
 
-// POST /products/:id/stock-output
+// Salida de almacen con transaccion para evitar inconsistencias de inventario.
 exports.stockOutput = async (req, res) => {
   const productId = Number(req.params.id);
   const quantity = Number(req.body?.quantity);
@@ -131,6 +136,7 @@ exports.stockOutput = async (req, res) => {
   try {
     await connection.beginTransaction();
 
+    // Bloquea la fila del producto para evitar carreras en actualizaciones concurrentes.
     const [rows] = await connection.query(
       `SELECT ProductID, ProductName,
               COALESCE(stock, UnitsInStock, 0) AS stock,
@@ -169,6 +175,7 @@ exports.stockOutput = async (req, res) => {
       [nextStock, nextUnitsInStock, nextStock < 10 ? 1 : 0, productId]
     );
 
+    // Commit solo cuando toda la operacion de salida fue consistente.
     await connection.commit();
     return res.json({
       message: "Salida de almacen registrada",

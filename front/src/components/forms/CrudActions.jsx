@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { Eye, Plus, Save, Trash2 } from 'lucide-react'
 
 export function CrudActions({

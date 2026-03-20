@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { Database, Layers3, Rows3, ShieldCheck } from 'lucide-react'
 
 export function StatsCards({ resourcesCount, rowsCount, currentResource, canUpdate }) {

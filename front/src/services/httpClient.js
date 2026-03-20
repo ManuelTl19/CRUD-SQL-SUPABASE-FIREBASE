@@ -1,3 +1,4 @@
+// Servicio frontend: centraliza comunicacion HTTP y acceso a fuentes de datos.
 import { API_BASE_URL } from '../config/env'
 import { isPlainObject } from '../utils/format'
 

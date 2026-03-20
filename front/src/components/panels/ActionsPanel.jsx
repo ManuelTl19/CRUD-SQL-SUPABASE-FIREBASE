@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { Panel } from '../common/Panel'
 import { CrudActions } from '../forms/CrudActions'
 import { IdInputs } from '../forms/IdInputs'

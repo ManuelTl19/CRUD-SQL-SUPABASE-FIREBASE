@@ -1,3 +1,4 @@
+// Configuracion de infraestructura para la API (DB, OpenAPI, registro y bootstrap).
 const db = require("./db");
 
 async function runStartupMigrations() {

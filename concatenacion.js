@@ -1,3 +1,4 @@
+// Modulo del proyecto: archivo de soporte para la solucion CRUD.
 nombre = (nombre, ap)=>console.log("Nombre: "+ nombre + " Apellido: "+ ap)
 
 nombre("Juan", "Perez")

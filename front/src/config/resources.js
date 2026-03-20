@@ -1,3 +1,4 @@
+// Configuracion del frontend: parametros y metadatos usados por la aplicacion.
 export const RESOURCES = [
   {
     key: 'categories',

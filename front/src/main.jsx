@@ -1,3 +1,4 @@
+// Modulo del frontend: participa en el ciclo principal de la aplicacion React.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'

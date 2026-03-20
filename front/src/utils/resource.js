@@ -1,3 +1,4 @@
+// Utilidad: funciones puras de apoyo para formato y transformaciones comunes.
 export const createInitialIdValues = (resource) => {
   const values = {}
   resource.idKeys.forEach((idKey) => {

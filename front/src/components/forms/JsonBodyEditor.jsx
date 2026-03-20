@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 export function JsonBodyEditor({ value, onChange }) {
   return (
     <label className="body-label">

@@ -168,6 +168,105 @@ PK compuesta en SQL:
 - `EmployeeID`
 - `TerritoryID`
 
+## 10.1) Procedimiento CRUD a nivel de codigo 
+
+Esta seccion describe el procedimiento tecnico para implementar y ejecutar CRUD en este proyecto, explicando que hace cada parte del codigo.
+
+### Flujo general de una operacion CRUD
+
+1. El cliente envia la peticion HTTP a un endpoint `/api/...`.
+2. La ruta (`routes/*.routes.js`) mapea metodo + URL hacia una funcion del controlador.
+3. El controlador (`controllers/*.controller.js`) recibe parametros (`req.params`), cuerpo (`req.body`) y ejecuta SQL con `db.query(...)`.
+4. Si aplica, el modelo (`modelos/*.model.js`) filtra los campos permitidos (`createData`, `updateData`).
+5. El controlador responde JSON con exito (`200`, `201`) o error (`404`, `409`, `500`).
+
+Ejemplo real en este repositorio (recurso products):
+
+- Rutas: `routes/products.routes.js`
+- Controlador: `controllers/products.controller.js`
+- Modelo de payload: `modelos/products.model.js`
+- Conexion DB: `config/db.js`
+- Manejo estandar de errores SQL: `controllers/_dbErrors.js`
+
+### Procedimiento 1: CREATE (crear registro)
+
+Objetivo: insertar un nuevo registro en MySQL.
+
+1. Ruta:
+  - `POST /api/products` apunta a `controller.create`.
+2. Controlador (`create`):
+  - Toma `req.body`.
+  - Normaliza datos de inventario (`stock`, `isLowStock`).
+  - Ejecuta `INSERT INTO products SET ?` con payload filtrado por modelo.
+3. Respuesta:
+  - `201` con `{ message, id }` si se crea correctamente.
+  - `409` para conflictos de integridad (`ER_DUP_ENTRY`, FK, etc.).
+  - `500` para errores no controlados.
+
+### Procedimiento 2: READ (consultar registros)
+
+Objetivo: obtener datos de uno o varios registros.
+
+1. Listado:
+  - `GET /api/products` -> `getAll`.
+  - Ejecuta `SELECT ... FROM products` y devuelve arreglo JSON.
+2. Detalle por ID:
+  - `GET /api/products/:id` -> `getById`.
+  - Ejecuta `SELECT * FROM products WHERE ProductID = ?`.
+3. Respuesta:
+  - `200` con datos.
+  - `404` si no existe el ID solicitado.
+
+### Procedimiento 3: UPDATE (actualizar registro)
+
+Objetivo: modificar un registro existente por su ID.
+
+1. Ruta:
+  - `PUT /api/products/:id` -> `update`.
+2. Controlador (`update`):
+  - Filtra campos permitidos con `productsModel.updateData(req.body)`.
+  - Recalcula `isLowStock` cuando cambia `stock`.
+  - Ejecuta `UPDATE products SET ? WHERE ProductID = ?`.
+3. Respuesta:
+  - `200` con mensaje de actualizacion.
+  - `404` si `affectedRows === 0`.
+  - `409` o `500` segun tipo de error SQL.
+
+### Procedimiento 4: DELETE (eliminar registro)
+
+Objetivo: borrar un registro por ID.
+
+1. Ruta:
+  - `DELETE /api/products/:id` -> `remove`.
+2. Controlador (`remove`):
+  - Ejecuta `DELETE FROM products WHERE ProductID = ?`.
+3. Respuesta:
+  - `200` si elimina correctamente.
+  - `404` si no existe el registro.
+  - `409` si no se puede eliminar por relacion con otras tablas (integridad referencial).
+
+### Procedimiento para claves compuestas (caso especial)
+
+En tablas como `order_details`, la clave primaria es compuesta (`OrderID`, `ProductID`).
+
+1. Las rutas reciben ambos parametros:
+  - `GET /api/order-details/:orderId/:productId`
+  - `PUT /api/order-details/:orderId/:productId`
+  - `DELETE /api/order-details/:orderId/:productId`
+2. El controlador usa ambos valores en el `WHERE` SQL.
+3. El criterio de exito/fallo es igual: `affectedRows`, `404`, `409`, `500`.
+
+### Buenas practicas aplicadas en el CRUD
+
+- Consultas parametrizadas (`?`) para reducir riesgo de inyeccion SQL.
+- Lista blanca de campos permitidos por recurso (`modelos/*.model.js`).
+- Manejo centralizado de errores SQL con `sendDbError(...)`.
+- Codigos HTTP consistentes segun resultado de la operacion.
+
+### Resumen corto para el informe
+
+El CRUD en este proyecto se implementa con arquitectura por capas simples: ruta -> controlador -> consulta SQL. Cada procedimiento (crear, consultar, actualizar y eliminar) tiene su endpoint, su query parametrizada y su respuesta HTTP definida. Adicionalmente, se cubren casos especiales como claves compuestas e integridad referencial para mantener consistencia de datos.
+
 ## 11) Formato de respuestas (comportamiento real)
 
 Dependiendo del controlador, las respuestas de escritura varían:

@@ -1,3 +1,4 @@
+// Pagina de aplicacion: compone secciones principales para una vista completa.
 import {
   AtSign,
   ArrowDownAZ,
@@ -19,6 +20,7 @@ import { useParams } from 'react-router-dom'
 import { RESOURCES } from '../config/resources'
 import { useResourceCards } from '../hooks/useResourceCards'
 import { resourcesApi } from '../services/resourcesApi'
+import { getDataSource, setDataSource } from '../services/dataSource'
 
 const getTitleField = (row) => {
   const keys = Object.keys(row)
@@ -127,6 +129,8 @@ export function ResourceCardsPage() {
   const [neededDate, setNeededDate] = useState('')
   const [requestNotes, setRequestNotes] = useState('')
   const [requestLoading, setRequestLoading] = useState(false)
+  const [dataSource, setDataSourceState] = useState(() => getDataSource())
+  const isFirebaseMode = dataSource === 'firebase'
 
   useEffect(() => {
     if (!isOrdersResource) {
@@ -569,10 +573,26 @@ export function ResourceCardsPage() {
             Gestion profesional con filtros, paginacion y formularios inteligentes.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={list} disabled={loading}>
-          <RefreshCw size={16} />
-          Actualizar
-        </button>
+        <div className="header-actions">
+          <label className="control-inline">
+            Base
+            <select
+              value={dataSource}
+              onChange={(event) => {
+                const next = setDataSource(event.target.value)
+                setDataSourceState(next)
+                void list()
+              }}
+            >
+              <option value="mysql">MySQL API</option>
+              <option value="firebase">Firebase API</option>
+            </select>
+          </label>
+          <button className="btn btn-primary" onClick={list} disabled={loading}>
+            <RefreshCw size={16} />
+            Actualizar
+          </button>
+        </div>
       </header>
 
       <section className="summary-strip card">
@@ -592,7 +612,7 @@ export function ResourceCardsPage() {
         </div>
         <div className="summary-pill">
           <span>Modo</span>
-          <strong>{resource.canUpdate ? 'Edicion completa' : 'Solo alta/baja'}</strong>
+          <strong>{isFirebaseMode ? 'Firebase API' : resource.canUpdate ? 'Edicion completa' : 'Solo alta/baja'}</strong>
         </div>
       </section>
 
@@ -664,14 +684,14 @@ export function ResourceCardsPage() {
             </label>
           ) : null}
 
-          {isProductsResource ? (
+          {isProductsResource && !isFirebaseMode ? (
             <button className="btn btn-secondary" onClick={registerStockOutput}>
               <Truck size={16} />
               Salida almacen
             </button>
           ) : null}
 
-          {isSuppliersResource ? (
+          {isSuppliersResource && !isFirebaseMode ? (
             <button className="btn btn-secondary" onClick={openSupplierPickerRequest}>
               <FileDown size={16} />
               Solicitud compra (PDF)
@@ -737,7 +757,7 @@ export function ResourceCardsPage() {
                   ))}
                 </div>
 
-                {isProductsResource ? (
+                {isProductsResource && !isFirebaseMode ? (
                   <button
                     className="btn btn-secondary card-inline-action"
                     onClick={() =>
@@ -752,7 +772,7 @@ export function ResourceCardsPage() {
                   </button>
                 ) : null}
 
-                {isSuppliersResource ? (
+                {isSuppliersResource && !isFirebaseMode ? (
                   <button
                     className="btn btn-secondary card-inline-action"
                     onClick={() =>
@@ -780,9 +800,11 @@ export function ResourceCardsPage() {
                     <button
                       className="btn btn-secondary card-inline-action"
                       onClick={() => confirmSale(Number(card.row.OrderID))}
-                      disabled={isOrderSold(card.row) || Boolean(availability?.hasShortage) || !availability?.hasDetails}
+                      disabled={isFirebaseMode || isOrderSold(card.row) || Boolean(availability?.hasShortage) || !availability?.hasDetails}
                       title={
-                        isOrderSold(card.row)
+                        isFirebaseMode
+                          ? 'Disponible solo en MySQL API'
+                          : isOrderSold(card.row)
                           ? 'La venta ya fue confirmada'
                           : availability?.hasShortage
                             ? 'No hay stock suficiente para confirmar'
@@ -797,8 +819,14 @@ export function ResourceCardsPage() {
                     <button
                       className="btn btn-secondary card-inline-action"
                       onClick={() => downloadSaleNote(Number(card.row.OrderID))}
-                      disabled={!isOrderSold(card.row)}
-                      title={isOrderSold(card.row) ? 'Generar nota de venta' : 'Debes confirmar la venta primero'}
+                      disabled={isFirebaseMode || !isOrderSold(card.row)}
+                      title={
+                        isFirebaseMode
+                          ? 'Disponible solo en MySQL API'
+                          : isOrderSold(card.row)
+                            ? 'Generar nota de venta'
+                            : 'Debes confirmar la venta primero'
+                      }
                     >
                       <FileDown size={15} />
                       Generar nota venta (PDF)

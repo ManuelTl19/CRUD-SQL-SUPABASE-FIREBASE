@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { RefreshCw, Sparkles } from 'lucide-react'
 
 export function WorkspaceHeader({ currentResourceLabel, onRefresh, loading }) {

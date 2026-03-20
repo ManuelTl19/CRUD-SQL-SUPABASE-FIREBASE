@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 import { Boxes, ChevronRight, ServerCog } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
 

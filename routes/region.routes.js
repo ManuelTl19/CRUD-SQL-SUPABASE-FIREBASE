@@ -1,3 +1,4 @@
+// Rutas API: define endpoints del recurso y delega en su controlador.
 const express = require("express");
 const router = express.Router();
 const controller = require("../controllers/region.controller");

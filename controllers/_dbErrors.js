@@ -1,3 +1,4 @@
+// Traduce errores comunes de MySQL a respuestas HTTP legibles para cliente.
 const sendDbError = (res, error, options = {}) => {
   if (error?.code === "ER_ROW_IS_REFERENCED_2") {
     return res.status(409).json({

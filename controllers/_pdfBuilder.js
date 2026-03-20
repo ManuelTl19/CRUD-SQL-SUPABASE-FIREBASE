@@ -1,3 +1,4 @@
+// Controlador: coordina la logica del recurso, acceso a datos y respuestas HTTP.
 const PDFDocument = require("pdfkit");
 
 function toText(value, fallback = "") {

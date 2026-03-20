@@ -1,3 +1,4 @@
+// Componente UI: bloque reutilizable de presentacion para la interfaz React.
 export function Panel({ title, icon: Icon, className = '', children }) {
   return (
     <section className={`panel card ${className}`.trim()}>
