@@ -9,6 +9,29 @@ function toMoney(value) {
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
 }
 
+function aggregateRequestItems(items) {
+  const grouped = new Map();
+
+  items.forEach((entry) => {
+    const current = grouped.get(entry.productId) || {
+      productId: entry.productId,
+      quantity: 0,
+      description: "",
+    };
+
+    current.quantity += Number(entry.quantity || 0);
+    if (entry.description) {
+      current.description = current.description
+        ? `${current.description}; ${entry.description}`
+        : entry.description;
+    }
+
+    grouped.set(entry.productId, current);
+  });
+
+  return Array.from(grouped.values());
+}
+
 // Flujo general del controlador Suppliers:
 // 1) Recibe req/res desde la ruta.
 // 2) Valida parametros y/o body segun la operacion.
@@ -108,8 +131,12 @@ exports.getPurchaseRequestPdf = async (req, res) => {
     return res.status(400).json({ message: "ID de proveedor invalido" });
   }
 
+  const connection = await db.getConnection();
+
   try {
-    const [supplierRows] = await db.query(
+    await connection.beginTransaction();
+
+    const [supplierRows] = await connection.query(
       "SELECT SupplierID, CompanyName, ContactName FROM suppliers WHERE SupplierID = ?",
       [supplierId]
     );
@@ -145,9 +172,10 @@ exports.getPurchaseRequestPdf = async (req, res) => {
       }
 
       const uniqueProductIds = Array.from(new Set(normalizedRequestItems.map((entry) => entry.productId)));
-      const [rows] = await db.query(
+      const [rows] = await connection.query(
         `SELECT ProductID, ProductName, SupplierID,
                 COALESCE(stock, UnitsInStock, 0) AS stock,
+                COALESCE(UnitsInStock, 0) AS UnitsInStock,
                 COALESCE(UnitPrice, 0) AS UnitPrice,
                 Discontinued
          FROM products
@@ -167,8 +195,9 @@ exports.getPurchaseRequestPdf = async (req, res) => {
       sourceProducts = rows;
     } else {
       // Caso automatico: se proponen productos con stock bajo del proveedor.
-      const [products] = await db.query(
+      const [products] = await connection.query(
         `SELECT ProductID, ProductName, COALESCE(stock, UnitsInStock, 0) AS stock,
+                COALESCE(UnitsInStock, 0) AS UnitsInStock,
                 COALESCE(ReorderLevel, 10) AS ReorderLevel,
                 COALESCE(UnitPrice, 0) AS UnitPrice
          FROM products
@@ -190,6 +219,8 @@ exports.getPurchaseRequestPdf = async (req, res) => {
       });
     }
 
+    const aggregatedItems = aggregateRequestItems(normalizedRequestItems);
+
     let estimatedTotal = 0;
     const items = [];
 
@@ -202,6 +233,32 @@ exports.getPurchaseRequestPdf = async (req, res) => {
       });
     } else {
       const productMap = new Map(sourceProducts.map((item) => [Number(item.ProductID), item]));
+      const stockCursorMap = new Map(
+        sourceProducts.map((item) => [Number(item.ProductID), Number(item.stock || 0)])
+      );
+
+      for (const entry of aggregatedItems) {
+        const product = productMap.get(entry.productId);
+        if (!product) {
+          continue;
+        }
+
+        const currentStock = Number(product.stock || 0);
+        const currentUnitsInStock = Number(product.UnitsInStock || 0);
+        const requestedQty = Number(entry.quantity || 0);
+        const nextStock = currentStock + requestedQty;
+        const nextUnitsInStock = currentUnitsInStock + requestedQty;
+
+        await connection.query(
+          `UPDATE products
+           SET stock = ?, UnitsInStock = ?, isLowStock = ?
+           WHERE ProductID = ?`,
+          [nextStock, nextUnitsInStock, nextStock < 10 ? 1 : 0, entry.productId]
+        );
+
+        product.stock = nextStock;
+        product.UnitsInStock = nextUnitsInStock;
+      }
 
       normalizedRequestItems.forEach((requestItem) => {
         const product = productMap.get(requestItem.productId);
@@ -214,17 +271,22 @@ exports.getPurchaseRequestPdf = async (req, res) => {
         const descriptionSuffix = requestItem.description
           ? ` - ${requestItem.description}`
           : "";
+        const stockBeforeLine = Number(stockCursorMap.get(requestItem.productId) || 0);
+        const stockAfterLine = stockBeforeLine + quantity;
+        stockCursorMap.set(requestItem.productId, stockAfterLine);
 
         estimatedTotal += lineTotal;
 
         items.push({
-          name: `${product.ProductName}${descriptionSuffix}`,
+          name: `${product.ProductName}${descriptionSuffix} (Stock: ${stockBeforeLine} -> ${stockAfterLine})`,
           qty: String(quantity),
           price: toMoney(product.UnitPrice),
           total: toMoney(lineTotal),
         });
       });
     }
+
+    await connection.commit();
 
     const pdfBuffer = await createTicketPdf({
       layout: "supplier-invoice",
@@ -258,6 +320,9 @@ exports.getPurchaseRequestPdf = async (req, res) => {
     // Respuesta binaria del PDF para descarga directa desde navegador/cliente.
     return res.send(pdfBuffer);
   } catch (error) {
+    await connection.rollback();
     return sendDbError(res, error);
+  } finally {
+    connection.release();
   }
 };

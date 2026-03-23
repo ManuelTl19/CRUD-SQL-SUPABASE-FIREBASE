@@ -4,6 +4,8 @@ import {
   ArrowDownAZ,
   ArrowUpZA,
   FileDown,
+  LayoutGrid,
+  List,
   Pencil,
   Plus,
   RefreshCw,
@@ -130,6 +132,7 @@ export function ResourceCardsPage() {
   const [requestNotes, setRequestNotes] = useState('')
   const [requestLoading, setRequestLoading] = useState(false)
   const [dataSource, setDataSourceState] = useState(() => getDataSource())
+  const [viewMode, setViewMode] = useState('cards')
   const isFirebaseMode = dataSource === 'firebase'
 
   useEffect(() => {
@@ -633,9 +636,28 @@ export function ResourceCardsPage() {
         </div>
 
         <div className="toolbar-controls">
+          <div className="view-switch" role="group" aria-label="Cambiar vista">
+            <button
+              className={`view-switch-btn ${viewMode === 'cards' ? 'active' : ''}`}
+              onClick={() => setViewMode('cards')}
+              type="button"
+            >
+              <LayoutGrid size={14} />
+              Tarjetas
+            </button>
+            <button
+              className={`view-switch-btn ${viewMode === 'table' ? 'active' : ''}`}
+              onClick={() => setViewMode('table')}
+              type="button"
+            >
+              <List size={14} />
+              Tabla
+            </button>
+          </div>
+
           <label className="control-inline">
             <SlidersHorizontal size={14} />
-            Tarjetas
+            Por pagina
             <select value={String(pageSize)} onChange={(e) => setPageSize(Number(e.target.value))}>
               {pageSizeOptions.map((option) => (
                 <option key={`page-size-${option}`} value={option}>
@@ -700,153 +722,247 @@ export function ResourceCardsPage() {
         </div>
       </section>
 
-      <section className="cards-grid" aria-live="polite">
-        {loadingSkeleton
-          ? Array.from({ length: Math.min(pageSize, 8) }).map((_, index) => (
-              <article key={`skeleton-${index}`} className="data-card skeleton-card">
-                <div className="skeleton-line w60" />
-                <div className="skeleton-line w40" />
-                <div className="skeleton-line w80" />
-                <div className="skeleton-line w70" />
-              </article>
-            ))
-          : null}
+      {viewMode === 'cards' ? (
+        <section className="cards-grid" aria-live="polite">
+          {loadingSkeleton
+            ? Array.from({ length: Math.min(pageSize, 8) }).map((_, index) => (
+                <article key={`skeleton-${index}`} className="data-card skeleton-card">
+                  <div className="skeleton-line w60" />
+                  <div className="skeleton-line w40" />
+                  <div className="skeleton-line w80" />
+                  <div className="skeleton-line w70" />
+                </article>
+              ))
+            : null}
 
-        {!loadingSkeleton
-          ? visibleCards.map((card) => {
-              const availability = card.orderAvailability
-              const cardClassName = isOrdersResource
-                ? `data-card ${
-                    availability?.isSold
-                      ? 'order-card-sold'
-                      : availability?.canConfirm
-                        ? 'order-card-ready'
-                        : availability?.hasShortage
-                          ? 'order-card-shortage'
-                          : 'order-card-pending'
-                  }`
-                : 'data-card'
-
-              return (
-              <article key={card.id} className={cardClassName}>
-                <div className="data-card-header">
-                  <h3>{String(card.row[card.titleField] ?? 'Sin titulo')}</h3>
-                  <div className="card-actions">
-                    <button
-                      className="icon-btn"
-                      onClick={() => openEditForm(card.row)}
-                      disabled={!resource.canUpdate}
-                      title={resource.canUpdate ? 'Editar' : 'No editable'}
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button className="icon-btn danger" onClick={() => remove(card.row)} title="Eliminar">
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                </div>
-
-                <p className="card-title-key">{fieldLabels[card.titleField] || card.titleField}</p>
-
-                <div className="kv-list">
-                  {card.detailKeys.map((key) => (
-                    <div key={key} className="kv-item">
-                      <span>{fieldLabels[key] || key}</span>
-                      <strong>{formatValue(card.row[key])}</strong>
-                    </div>
-                  ))}
-                </div>
-
-                {isProductsResource && !isFirebaseMode ? (
-                  <button
-                    className="btn btn-secondary card-inline-action"
-                    onClick={() =>
-                      openSupplierRequestModal({
-                        supplierId: Number(card.row.SupplierID),
-                        initialProductId: Number(card.row.ProductID),
-                      })
-                    }
-                  >
-                    <FileDown size={15} />
-                    Solicitar a proveedor
-                  </button>
-                ) : null}
-
-                {isSuppliersResource && !isFirebaseMode ? (
-                  <button
-                    className="btn btn-secondary card-inline-action"
-                    onClick={() =>
-                      openSupplierRequestModal({
-                        supplierId: Number(card.row.SupplierID),
-                      })
-                    }
-                  >
-                    <FileDown size={15} />
-                    Solicitar productos
-                  </button>
-                ) : null}
-
-                {isOrdersResource ? (
-                  <>
-                    <p className="order-status-badge">
-                      {availability?.isSold
-                        ? 'Aceptada (vendida)'
+          {!loadingSkeleton
+            ? visibleCards.map((card) => {
+                const availability = card.orderAvailability
+                const cardClassName = isOrdersResource
+                  ? `data-card ${
+                      availability?.isSold
+                        ? 'order-card-sold'
                         : availability?.canConfirm
-                          ? 'Lista para aceptar'
+                          ? 'order-card-ready'
                           : availability?.hasShortage
-                            ? `Sin stock suficiente (${availability.shortageCount})`
-                            : 'Sin detalle de pedido'}
-                    </p>
-                    <button
-                      className="btn btn-secondary card-inline-action"
-                      onClick={() => confirmSale(Number(card.row.OrderID))}
-                      disabled={isFirebaseMode || isOrderSold(card.row) || Boolean(availability?.hasShortage) || !availability?.hasDetails}
-                      title={
-                        isFirebaseMode
-                          ? 'Disponible solo en MySQL API'
-                          : isOrderSold(card.row)
-                          ? 'La venta ya fue confirmada'
-                          : availability?.hasShortage
-                            ? 'No hay stock suficiente para confirmar'
-                            : !availability?.hasDetails
-                              ? 'El pedido no tiene detalle'
-                              : 'Confirmar venta'
-                      }
-                    >
-                      <Truck size={15} />
-                      {isOrderSold(card.row) ? 'Venta confirmada' : 'Confirmar venta'}
-                    </button>
-                    <button
-                      className="btn btn-secondary card-inline-action"
-                      onClick={() => downloadSaleNote(Number(card.row.OrderID))}
-                      disabled={isFirebaseMode || !isOrderSold(card.row)}
-                      title={
-                        isFirebaseMode
-                          ? 'Disponible solo en MySQL API'
-                          : isOrderSold(card.row)
-                            ? 'Generar nota de venta'
-                            : 'Debes confirmar la venta primero'
-                      }
-                    >
-                      <FileDown size={15} />
-                      Generar nota venta (PDF)
-                    </button>
-                  </>
-                ) : null}
-              </article>
-            )})
-          : null}
+                            ? 'order-card-shortage'
+                            : 'order-card-pending'
+                    }`
+                  : 'data-card'
 
-        {!loadingSkeleton && visibleCards.length === 0 ? (
-          <article className="empty-card">
-            <p>No hay resultados para mostrar.</p>
-            <button className="btn btn-success" onClick={openCreateForm}>
-              <Plus size={16} />
-              Crear primer registro
-            </button>
-          </article>
-        ) : null}
-      </section>
+                return (
+                  <article key={card.id} className={cardClassName}>
+                    <div className="data-card-header">
+                      <h3>{String(card.row[card.titleField] ?? 'Sin titulo')}</h3>
+                      <div className="card-actions">
+                        <button
+                          className="icon-btn"
+                          onClick={() => openEditForm(card.row)}
+                          disabled={!resource.canUpdate}
+                          title={resource.canUpdate ? 'Editar' : 'No editable'}
+                        >
+                          <Pencil size={15} />
+                        </button>
+                        <button className="icon-btn danger" onClick={() => remove(card.row)} title="Eliminar">
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="card-title-key">{fieldLabels[card.titleField] || card.titleField}</p>
+
+                    {isProductsResource ? (
+                      <div className="stock-highlight">
+                        <span>Stock disponible</span>
+                        <strong>{Number(card.row?.stock ?? card.row?.UnitsInStock ?? 0)}</strong>
+                      </div>
+                    ) : null}
+
+                    <div className="kv-list">
+                      {card.detailKeys.map((key) => (
+                        <div key={key} className="kv-item">
+                          <span>{fieldLabels[key] || key}</span>
+                          <strong>{formatValue(card.row[key])}</strong>
+                        </div>
+                      ))}
+                    </div>
+
+                    {isProductsResource && !isFirebaseMode ? (
+                      <button
+                        className="btn btn-secondary card-inline-action"
+                        onClick={() =>
+                          openSupplierRequestModal({
+                            supplierId: Number(card.row.SupplierID),
+                            initialProductId: Number(card.row.ProductID),
+                          })
+                        }
+                      >
+                        <FileDown size={15} />
+                        Solicitar a proveedor
+                      </button>
+                    ) : null}
+
+                    {isSuppliersResource && !isFirebaseMode ? (
+                      <button
+                        className="btn btn-secondary card-inline-action"
+                        onClick={() =>
+                          openSupplierRequestModal({
+                            supplierId: Number(card.row.SupplierID),
+                          })
+                        }
+                      >
+                        <FileDown size={15} />
+                        Solicitar productos
+                      </button>
+                    ) : null}
+
+                    {isOrdersResource ? (
+                      <>
+                        <p className="order-status-badge">
+                          {availability?.isSold
+                            ? 'Aceptada (vendida)'
+                            : availability?.canConfirm
+                              ? 'Lista para aceptar'
+                              : availability?.hasShortage
+                                ? `Sin stock suficiente (${availability.shortageCount})`
+                                : 'Sin detalle de pedido'}
+                        </p>
+                        <button
+                          className="btn btn-secondary card-inline-action"
+                          onClick={() => confirmSale(Number(card.row.OrderID))}
+                          disabled={
+                            isFirebaseMode ||
+                            isOrderSold(card.row) ||
+                            Boolean(availability?.hasShortage) ||
+                            !availability?.hasDetails
+                          }
+                          title={
+                            isFirebaseMode
+                              ? 'Disponible solo en MySQL API'
+                              : isOrderSold(card.row)
+                                ? 'La venta ya fue confirmada'
+                                : availability?.hasShortage
+                                  ? 'No hay stock suficiente para confirmar'
+                                  : !availability?.hasDetails
+                                    ? 'El pedido no tiene detalle'
+                                    : 'Confirmar venta'
+                          }
+                        >
+                          <Truck size={15} />
+                          {isOrderSold(card.row) ? 'Venta confirmada' : 'Confirmar venta'}
+                        </button>
+                        <button
+                          className="btn btn-secondary card-inline-action"
+                          onClick={() => downloadSaleNote(Number(card.row.OrderID))}
+                          disabled={isFirebaseMode || !isOrderSold(card.row)}
+                          title={
+                            isFirebaseMode
+                              ? 'Disponible solo en MySQL API'
+                              : isOrderSold(card.row)
+                                ? 'Generar nota de venta'
+                                : 'Debes confirmar la venta primero'
+                          }
+                        >
+                          <FileDown size={15} />
+                          Generar nota venta (PDF)
+                        </button>
+                      </>
+                    ) : null}
+                  </article>
+                )
+              })
+            : null}
+
+          {!loadingSkeleton && visibleCards.length === 0 ? (
+            <article className="empty-card">
+              <p>No hay resultados para mostrar.</p>
+              <button className="btn btn-success" onClick={openCreateForm}>
+                <Plus size={16} />
+                Crear primer registro
+              </button>
+            </article>
+          ) : null}
+        </section>
+      ) : (
+        <section className="card table-panel" aria-live="polite">
+          <div className="table-wrap modern-table-wrap">
+            <table className="modern-table">
+              <thead>
+                <tr>
+                  {(visibleFields.length ? visibleFields : fields).slice(0, 7).map((field) => (
+                    <th key={`th-${field}`}>{fieldLabels[field] || field}</th>
+                  ))}
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleCards.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="table-empty-cell">
+                      No hay registros para mostrar
+                    </td>
+                  </tr>
+                ) : (
+                  visibleCards.map((card) => {
+                    const tableFields = (visibleFields.length ? visibleFields : fields).slice(0, 7)
+                    const availability = card.orderAvailability
+                    return (
+                      <tr key={`table-row-${card.id}`}>
+                        {tableFields.map((field) => {
+                          const isStockField =
+                            isProductsResource &&
+                            (field === 'stock' || field === 'UnitsInStock' || field === 'isLowStock')
+
+                          if (isStockField) {
+                            return (
+                              <td key={`td-${card.id}-${field}`}>
+                                <span className="table-stock-pill">{formatValue(card.row[field])}</span>
+                              </td>
+                            )
+                          }
+
+                          return <td key={`td-${card.id}-${field}`}>{formatValue(card.row[field])}</td>
+                        })}
+                        <td>
+                          <div className="table-actions">
+                            <button
+                              className="icon-btn"
+                              onClick={() => openEditForm(card.row)}
+                              disabled={!resource.canUpdate}
+                              title={resource.canUpdate ? 'Editar' : 'No editable'}
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button className="icon-btn danger" onClick={() => remove(card.row)} title="Eliminar">
+                              <Trash2 size={14} />
+                            </button>
+
+                            {isOrdersResource ? (
+                              <button
+                                className="btn btn-secondary btn-inline"
+                                onClick={() => confirmSale(Number(card.row.OrderID))}
+                                disabled={
+                                  isFirebaseMode ||
+                                  isOrderSold(card.row) ||
+                                  Boolean(availability?.hasShortage) ||
+                                  !availability?.hasDetails
+                                }
+                              >
+                                <Truck size={14} />
+                                Confirmar
+                              </button>
+                            ) : null}
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       {filteredRows.length > pageSize ? (
         <section className="pagination-wrap card">
