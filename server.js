@@ -45,6 +45,7 @@ app.use("/api/orders", require("./routes/orders.routes"));
 app.use("/api/order-details", require("./routes/order_details.routes"));
 app.use("/api/customer-customer-demo", require("./routes/customerCustomerDemo.routes"));
 app.use("/api/employee-territories", require("./routes/employeeTerritories.routes"));
+app.use("/api/pdf", require("./routes/pdf.routes"));
 app.use(require("./routes/firebase.routes"));
 
 

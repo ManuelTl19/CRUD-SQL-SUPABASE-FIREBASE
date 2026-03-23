@@ -10,8 +10,8 @@ export function ResourceSidebar({ resources, apiBaseUrl }) {
           <ServerCog size={20} />
         </div>
         <div>
-          <h2>Control Center</h2>
-          <p>API Base: {apiBaseUrl}/api</p>
+          <h2>Northwind Dual Console</h2>
+          <p>{apiBaseUrl} | MySQL / Supabase</p>
         </div>
       </div>
 

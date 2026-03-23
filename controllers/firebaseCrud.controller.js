@@ -24,7 +24,7 @@ function validateIdValues(idValues) {
 function getModelOr404(resourceKey, res) {
   const model = registry[resourceKey];
   if (!model) {
-    res.status(404).json({ message: "Recurso no soportado en firebase" });
+    res.status(404).json({ message: "Recurso no soportado en proveedor alterno" });
     return null;
   }
   return model;
@@ -40,7 +40,7 @@ function createCrudController(resourceKey) {
         const rows = await firebaseGateway.list(resourceKey);
         res.json(rows);
       } catch (error) {
-        res.status(500).json({ message: error.message || "Error firebase" });
+        res.status(500).json({ message: error.message || "Error en API alterna" });
       }
     },
 
@@ -60,7 +60,7 @@ function createCrudController(resourceKey) {
         }
         return res.json(row);
       } catch (error) {
-        return res.status(500).json({ message: error.message || "Error firebase" });
+        return res.status(500).json({ message: error.message || "Error en API alterna" });
       }
     },
 

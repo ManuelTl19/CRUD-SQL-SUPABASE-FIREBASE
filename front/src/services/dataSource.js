@@ -3,7 +3,7 @@ const STORAGE_KEY = "active-data-source";
 const DEFAULT_SOURCE = "mysql";
 
 function sanitize(value) {
-  return value === "firebase" ? "firebase" : "mysql";
+  return value === "supabase" ? "supabase" : "mysql";
 }
 
 export function getDataSource() {

@@ -131,9 +131,32 @@ export function ResourceCardsPage() {
   const [neededDate, setNeededDate] = useState('')
   const [requestNotes, setRequestNotes] = useState('')
   const [requestLoading, setRequestLoading] = useState(false)
+  const [locallySoldOrderIds, setLocallySoldOrderIds] = useState(() => new Set())
   const [dataSource, setDataSourceState] = useState(() => getDataSource())
   const [viewMode, setViewMode] = useState('cards')
-  const isFirebaseMode = dataSource === 'firebase'
+  const isSupabaseMode = dataSource === 'supabase'
+  const sourceLabel = isSupabaseMode ? 'Supabase API' : 'MySQL API'
+
+  const getOrderStatusText = (row) => {
+    const candidates = [
+      row?.status,
+      row?.Status,
+      row?.orderstatus,
+      row?.OrderStatus,
+      row?.estado,
+      row?.Estado,
+    ]
+    const found = candidates.find((value) => value !== null && value !== undefined && value !== '')
+    return String(found || '').toLowerCase().trim()
+  }
+
+  const isOrderSold = (row) => {
+    const orderId = Number(row?.OrderID ?? row?.orderid)
+    if (Number.isInteger(orderId) && locallySoldOrderIds.has(orderId)) {
+      return true
+    }
+    return getOrderStatusText(row) === 'vendido'
+  }
 
   useEffect(() => {
     if (!isOrdersResource) {
@@ -187,7 +210,7 @@ export function ResourceCardsPage() {
     const map = new Map()
     filteredRows.forEach((row) => {
       const orderId = Number(row?.OrderID)
-      const isSold = String(row?.status || '').toLowerCase() === 'vendido'
+      const isSold = isOrderSold(row)
       const details = detailsByOrderMap.get(orderId) || []
 
       if (isSold) {
@@ -228,7 +251,13 @@ export function ResourceCardsPage() {
       })
     })
     return map
-  }, [isOrdersResource, filteredRows, detailsByOrderMap, productStockMap])
+  }, [
+    isOrdersResource,
+    filteredRows,
+    detailsByOrderMap,
+    productStockMap,
+    locallySoldOrderIds,
+  ])
 
   const visibleCards = useMemo(() => {
     if (!isOrdersResource) {
@@ -272,6 +301,11 @@ export function ResourceCardsPage() {
 
     try {
       await resourcesApi.confirmSale(orderId)
+      setLocallySoldOrderIds((prev) => {
+        const next = new Set(prev)
+        next.add(Number(orderId))
+        return next
+      })
       await Swal.fire({
         title: 'Venta confirmada',
         text: `Pedido ${orderId} marcado como vendido`,
@@ -302,8 +336,6 @@ export function ResourceCardsPage() {
       })
     }
   }
-
-  const isOrderSold = (row) => String(row?.status || '').toLowerCase() === 'vendido'
 
   const registerStockOutput = async () => {
     const formResponse = await Swal.fire({
@@ -564,12 +596,12 @@ export function ResourceCardsPage() {
   }
 
   return (
-    <main className="content">
+    <main className={`content ${isSupabaseMode ? 'mode-supabase' : 'mode-mysql'}`}>
       <header className="header card">
         <div className="header-title-wrap">
           <div className="header-badge">
             <AtSign size={16} />
-            <span>Pagina de Recurso</span>
+            <span>{isSupabaseMode ? 'Workspace Supabase' : 'Workspace MySQL'}</span>
           </div>
           <h1>{resource.label}</h1>
           <p className="header-subtitle">
@@ -588,7 +620,7 @@ export function ResourceCardsPage() {
               }}
             >
               <option value="mysql">MySQL API</option>
-              <option value="firebase">Firebase API</option>
+              <option value="supabase">Supabase API</option>
             </select>
           </label>
           <button className="btn btn-primary" onClick={list} disabled={loading}>
@@ -615,7 +647,7 @@ export function ResourceCardsPage() {
         </div>
         <div className="summary-pill">
           <span>Modo</span>
-          <strong>{isFirebaseMode ? 'Firebase API' : resource.canUpdate ? 'Edicion completa' : 'Solo alta/baja'}</strong>
+          <strong>{isSupabaseMode ? sourceLabel : resource.canUpdate ? 'Edicion completa' : 'Solo alta/baja'}</strong>
         </div>
       </section>
 
@@ -706,14 +738,14 @@ export function ResourceCardsPage() {
             </label>
           ) : null}
 
-          {isProductsResource && !isFirebaseMode ? (
+          {isProductsResource ? (
             <button className="btn btn-secondary" onClick={registerStockOutput}>
               <Truck size={16} />
               Salida almacen
             </button>
           ) : null}
 
-          {isSuppliersResource && !isFirebaseMode ? (
+          {isSuppliersResource ? (
             <button className="btn btn-secondary" onClick={openSupplierPickerRequest}>
               <FileDown size={16} />
               Solicitud compra (PDF)
@@ -787,7 +819,7 @@ export function ResourceCardsPage() {
                       ))}
                     </div>
 
-                    {isProductsResource && !isFirebaseMode ? (
+                    {isProductsResource ? (
                       <button
                         className="btn btn-secondary card-inline-action"
                         onClick={() =>
@@ -802,7 +834,7 @@ export function ResourceCardsPage() {
                       </button>
                     ) : null}
 
-                    {isSuppliersResource && !isFirebaseMode ? (
+                    {isSuppliersResource ? (
                       <button
                         className="btn btn-secondary card-inline-action"
                         onClick={() =>
@@ -831,15 +863,12 @@ export function ResourceCardsPage() {
                           className="btn btn-secondary card-inline-action"
                           onClick={() => confirmSale(Number(card.row.OrderID))}
                           disabled={
-                            isFirebaseMode ||
                             isOrderSold(card.row) ||
                             Boolean(availability?.hasShortage) ||
                             !availability?.hasDetails
                           }
                           title={
-                            isFirebaseMode
-                              ? 'Disponible solo en MySQL API'
-                              : isOrderSold(card.row)
+                            isOrderSold(card.row)
                                 ? 'La venta ya fue confirmada'
                                 : availability?.hasShortage
                                   ? 'No hay stock suficiente para confirmar'
@@ -854,11 +883,9 @@ export function ResourceCardsPage() {
                         <button
                           className="btn btn-secondary card-inline-action"
                           onClick={() => downloadSaleNote(Number(card.row.OrderID))}
-                          disabled={isFirebaseMode || !isOrderSold(card.row)}
+                          disabled={!isOrderSold(card.row)}
                           title={
-                            isFirebaseMode
-                              ? 'Disponible solo en MySQL API'
-                              : isOrderSold(card.row)
+                            isOrderSold(card.row)
                                 ? 'Generar nota de venta'
                                 : 'Debes confirmar la venta primero'
                           }
@@ -942,7 +969,6 @@ export function ResourceCardsPage() {
                                 className="btn btn-secondary btn-inline"
                                 onClick={() => confirmSale(Number(card.row.OrderID))}
                                 disabled={
-                                  isFirebaseMode ||
                                   isOrderSold(card.row) ||
                                   Boolean(availability?.hasShortage) ||
                                   !availability?.hasDetails

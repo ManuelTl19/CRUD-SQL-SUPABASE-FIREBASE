@@ -150,6 +150,59 @@ body {
   align-content: start;
 }
 
+.content.mode-mysql {
+  --mode-accent: #1f68ff;
+  --mode-soft: #deebff;
+  --mode-line: #bcd0f6;
+}
+
+.content.mode-supabase {
+  --mode-accent: #0ea76b;
+  --mode-soft: #def8ed;
+  --mode-line: #b6ebd3;
+}
+
+.content.mode-mysql .header,
+.content.mode-supabase .header {
+  position: relative;
+  overflow: hidden;
+}
+
+.content.mode-mysql .header::after,
+.content.mode-supabase .header::after {
+  content: '';
+  position: absolute;
+  top: -42px;
+  right: -38px;
+  width: 180px;
+  height: 180px;
+  border-radius: 50%;
+  background: radial-gradient(circle, var(--mode-soft) 0%, rgba(255, 255, 255, 0) 70%);
+  pointer-events: none;
+}
+
+.content.mode-mysql .header-badge,
+.content.mode-supabase .header-badge {
+  color: color-mix(in srgb, var(--mode-accent) 70%, #0f172a 30%);
+  background: color-mix(in srgb, var(--mode-soft) 85%, #ffffff 15%);
+  border: 1px solid var(--mode-line);
+}
+
+.content.mode-mysql .summary-pill,
+.content.mode-supabase .summary-pill {
+  border-color: var(--mode-line);
+}
+
+.content.mode-mysql .summary-pill:last-child strong,
+.content.mode-supabase .summary-pill:last-child strong {
+  color: var(--mode-accent);
+}
+
+.content.mode-mysql .btn-primary,
+.content.mode-supabase .btn-primary {
+  background: linear-gradient(120deg, var(--mode-accent) 0%, color-mix(in srgb, var(--mode-accent) 70%, #111827 30%) 100%);
+}
+
 .card {
   border-radius: var(--radius-xl);
   border: 1px solid rgba(190, 202, 227, 0.7);

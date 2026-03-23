@@ -5,16 +5,21 @@ const { createCrudController, toParamName } = require("../controllers/firebaseCr
 
 const router = express.Router();
 
+const providerPrefixes = ["/api-firebase", "/api-supabase"];
+
 Object.entries(registry).forEach(([resourceKey, model]) => {
   const controller = createCrudController(resourceKey);
   const idParams = model.idFields.map((idField) => `:${toParamName(idField)}`).join("/");
-  const withIdsPath = `/api-firebase/${resourceKey}/${idParams}`;
 
-  router.get(`/api-firebase/${resourceKey}`, controller.list);
-  router.get(withIdsPath, controller.getById);
-  router.post(`/api-firebase/${resourceKey}`, controller.create);
-  router.put(withIdsPath, controller.update);
-  router.delete(withIdsPath, controller.remove);
+  providerPrefixes.forEach((prefix) => {
+    const withIdsPath = `${prefix}/${resourceKey}/${idParams}`;
+
+    router.get(`${prefix}/${resourceKey}`, controller.list);
+    router.get(withIdsPath, controller.getById);
+    router.post(`${prefix}/${resourceKey}`, controller.create);
+    router.put(withIdsPath, controller.update);
+    router.delete(withIdsPath, controller.remove);
+  });
 });
 
 module.exports = router;
